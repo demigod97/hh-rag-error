@@ -1,0 +1,9 @@
+---
+description:
+globs:
+alwaysApply: True
+---
+Use the shadcn-ui-mcp-server for all UI component operations.
+Respect the architecture defined in .mcp/architecture-context.md.
+Never modify Supabase migrations or edge functions without explicit permission.
+Always use the existing component patterns and API structure.
