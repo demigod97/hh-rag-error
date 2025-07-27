@@ -559,24 +559,22 @@ export async function getReports(notebookId: string) {
   )
 }
 
-export async function getReportContent(filePath: string): Promise<string> {
+export async function getReportContentByPath(filePath: string): Promise<string> {
   return await fetchWithErrorHandling(
     async () => {
       const { data, error } = await supabase.storage
         .from('reports')
         .download(filePath)
-      
+
       if (error) throw error
-      
+
       const text = await data.text()
       return text
     },
     `report_content_${filePath}`,
     'Report content not available' // fallback content
   )
-}
-
-export async function downloadReportFile(filePath: string, fileName: string): Promise<void> {
+}export async function downloadReportFile(filePath: string, fileName: string): Promise<void> {
   try {
     const { data, error } = await supabase.storage
       .from('reports')

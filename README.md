@@ -21,14 +21,14 @@ A **multi‑LLM, retrieval‑augmented generation (RAG)** platform for town‑pl
 
 ```text
 ┌──────────────┐          ┌───────────────┐        ┌────────────────┐
-│  Frontend    │──files──▶│  Supabase      │──trig──▶ Edge Functions │
-│  (Svelte/TS) │  REST    │  (DB + Storage)│        │  (Deno)        │
+│  Frontend    │──files──▶│  Supabase      │──trig──▶ trigger-n8n    │
+│  (React/TS)  │  REST    │  (DB + Storage)│        │  Edge Function │
 └──────────────┘          └──────┬─────────┘        └──────┬─────────┘
-       ▲ WebSockets/HTTP              │ REST (RLS)                │ Webhooks
+       ▲ WebSocket/HTTP               │ REST (RLS)                │ Webhooks  
        │                              ▼                          ▼
 ┌──────────────┐             ┌──────────────┐          ┌────────────────┐
-│    n8n        │  ←———chat— │   LLMs        │  embed  │  Ollama /      │
-│ (Workflow)    │            │ (Ollama/API) │ ───────▶ │  OpenAI/Gemini │
+│    n8n        │◀──chat/───▶│    OpenAI    │  embed   │     n8n       │
+│  Workflows    │   ingest   │    Gemini    │───────▶ │   Webhooks    │
 └──────────────┘             └──────────────┘          └────────────────┘
 ```
 
@@ -81,26 +81,25 @@ Row‑level security (RLS) enabled on every table; policies mirror `user_id` own
 
 ---
 
-## 🔌 Edge Functions (Deno)
+## 🔌 Edge Functions
 
-| Function                      | Description                                                                                                             |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **process-pdf-with-metadata** | Parses PDF via LlamaCloud → discovers metadata → semantic chunking → inserts chunks & kicks **generate‑embeddings** job |
-| **generate-embeddings**       | Batch embeds chunks using Ollama/OpenAI/Gemini embedding endpoints                                                      |
-| **batch-vector-search**       | Accepts multiple queries, returns top‑k matches with similarity scores                                                  |
-| **generate-report**           | Creates `report_generations` record & initial `report_sections` queries                                                 |
-| **process-report-sections**   | Iterates sections → searches context → drafts content with selected LLM                                                 |
+| Function        | Description                                                                          |
+| --------------- | ------------------------------------------------------------------------------------ |
+| **trigger-n8n** | Routes all AI operations through n8n workflows:                                      |
+|                | • File upload → `https://n8n.coralshades.ai/webhook/ingest`                          |
+|                | • Chat/Reports → `https://n8n.coralshades.ai/webhook/hhlm-chat`                      |
+|                | Handles authentication, logging, and error handling for all n8n webhook interactions. |
 
-All functions are JWT‑less and invoked via `supabase.functions.invoke()` from the frontend or by n8n.
+Function is JWT-authenticated and invoked via `supabase.functions.invoke()` from the frontend.
 
 ---
 
 ## 🤖 n8n Workflows
 
-1. **Chat Handler** – `/webhook/hhlm-chat` → prepares context → routes to provider → streams result back
-2. **Embedding Generator** – `/webhook/generate-embeddings` → fetches chunk batch → calls embedding API → upserts into `chunk_embeddings`
+1. **Document Ingest** – `/webhook/ingest` → processes uploads → generates embeddings → stores in Supabase
+2. **Chat/Report Handler** – `/webhook/hhlm-chat` → handles chat messages and report generation → streams responses
 
-Import `n8n-workflows.json`, set environment variables, and **activate** each workflow.
+All webhooks are hosted at `https://n8n.coralshades.ai/`. Configure environment variables and activate workflows in n8n dashboard.
 
 ---
 
