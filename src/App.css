@@ -40,3 +40,138 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Report Display Enhancements */
+.report-display {
+  /* Ensure proper spacing and layout */
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  transition: all 0.2s ease-in-out;
+}
+
+.report-display:hover {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.05);
+}
+
+/* Enhanced prose styling for report content */
+.report-display .prose {
+  color: hsl(var(--foreground));
+  max-width: none;
+}
+
+.report-display .prose h1 {
+  color: hsl(var(--foreground));
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid hsl(var(--border));
+}
+
+.report-display .prose h2 {
+  color: hsl(var(--foreground));
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+.report-display .prose h3 {
+  color: hsl(var(--foreground));
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.report-display .prose p {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.report-display .prose ul, 
+.report-display .prose ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.report-display .prose li {
+  margin-bottom: 0.25rem;
+}
+
+.report-display .prose strong {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+/* Chat message styling for reports */
+.bg-chat-assistant .report-display {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.bg-chat-assistant .report-display:hover {
+  border: none;
+  box-shadow: none;
+}
+
+/* Fullscreen report overlay */
+.report-display.fixed {
+  background: hsl(var(--background)) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* Enhanced scroll area styling */
+.report-display [data-radix-scroll-area-viewport] {
+  border-radius: 8px;
+}
+
+/* Scroll indicators */
+.report-display [data-radix-scroll-area-scrollbar] {
+  display: flex;
+  user-select: none;
+  touch-action: none;
+  padding: 2px;
+  background: hsl(var(--muted));
+  transition: background 150ms ease-out;
+}
+
+.report-display [data-radix-scroll-area-scrollbar]:hover {
+  background: hsl(var(--muted) / 0.8);
+}
+
+.report-display [data-radix-scroll-area-thumb] {
+  flex: 1;
+  background: hsl(var(--muted-foreground) / 0.5);
+  border-radius: 8px;
+  position: relative;
+}
+
+.report-display [data-radix-scroll-area-thumb]:hover {
+  background: hsl(var(--muted-foreground) / 0.7);
+}
+
+/* Print styles for reports */
+@media print {
+  .report-display {
+    background: white !important;
+    color: black !important;
+    border: 1px solid #ccc !important;
+    box-shadow: none !important;
+  }
+  
+  .report-display .prose {
+    color: black !important;
+  }
+  
+  .report-display h1,
+  .report-display h2,
+  .report-display h3,
+  .report-display h4,
+  .report-display h5,
+  .report-display h6 {
+    color: black !important;
+  }
+}
