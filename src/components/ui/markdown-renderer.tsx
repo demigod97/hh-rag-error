@@ -1,157 +1,159 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface MarkdownRendererProps {
   content: string;
-  className?: string;
 }
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ 
-  content, 
-  className = "" 
-}) => {
-  const renderMarkdown = (markdown: string): JSX.Element[] => {
-    const lines = markdown.split('\n');
-    const elements: JSX.Element[] = [];
-    let currentList: JSX.Element[] = [];
-    let inList = false;
-    let listType: 'ul' | 'ol' = 'ul';
-
-    const flushList = () => {
-      if (currentList.length > 0) {
-        const ListComponent = listType === 'ol' ? 'ol' : 'ul';
-        elements.push(
-          <ListComponent key={`list-${elements.length}`} className="ml-6 mb-4 space-y-2">
-            {currentList.map((item, index) => (
-              <li key={index} className="text-foreground">
-                {item}
-              </li>
-            ))}
-          </ListComponent>
-        );
-        currentList = [];
-        inList = false;
-      }
-    };
-
-    lines.forEach((line, index) => {
-      const trimmedLine = line.trim();
-
-      // Headers
-      if (trimmedLine.startsWith('# ')) {
-        flushList();
-        elements.push(
-          <h1 key={index} className="text-3xl font-bold mb-4 text-foreground border-b pb-2">
-            {trimmedLine.substring(2)}
-          </h1>
-        );
-      } else if (trimmedLine.startsWith('## ')) {
-        flushList();
-        elements.push(
-          <h2 key={index} className="text-2xl font-semibold mb-3 text-foreground mt-6 border-b pb-2">
-            {trimmedLine.substring(3)}
-          </h2>
-        );
-      } else if (trimmedLine.startsWith('### ')) {
-        flushList();
-        elements.push(
-          <h3 key={index} className="text-xl font-medium mb-2 text-foreground mt-4">
-            {trimmedLine.substring(4)}
-          </h3>
-        );
-      } else if (trimmedLine.startsWith('#### ')) {
-        flushList();
-        elements.push(
-          <h4 key={index} className="text-lg font-medium mb-2 text-foreground mt-3">
-            {trimmedLine.substring(5)}
-          </h4>
-        );
-      }
-      // Lists
-      else if (trimmedLine.startsWith('- ') || trimmedLine.startsWith('* ')) {
-        if (!inList) {
-          listType = 'ul';
-          inList = true;
-        }
-        currentList.push(
-          <span key={index} className="text-foreground">
-            {trimmedLine.substring(2)}
-          </span>
-        );
-      } else if (/^\d+\.\s/.test(trimmedLine)) {
-        if (!inList) {
-          listType = 'ol';
-          inList = true;
-        }
-        currentList.push(
-          <span key={index} className="text-foreground">
-            {trimmedLine.replace(/^\d+\.\s/, '')}
-          </span>
-        );
-      }
-      // Code blocks
-      else if (trimmedLine.startsWith('```')) {
-        flushList();
-        // Simple code block handling
-        elements.push(
-          <Card key={index} className="my-4">
-            <CardContent className="p-4 bg-muted">
-              <pre className="text-sm font-mono text-foreground overflow-x-auto">
-                <code>{trimmedLine.substring(3)}</code>
-              </pre>
-            </CardContent>
-          </Card>
-        );
-      }
-      // Inline code
-      else if (trimmedLine.includes('`')) {
-        flushList();
-        const processedLine = trimmedLine.replace(/`([^`]+)`/g, 
-          '<code class="bg-muted px-2 py-1 rounded text-sm font-mono">$1</code>'
-        );
-        elements.push(
-          <p key={index} className="mb-4 text-foreground" 
-             dangerouslySetInnerHTML={{ __html: processedLine }} />
-        );
-      }
-      // Separators
-      else if (trimmedLine === '---' || trimmedLine === '***') {
-        flushList();
-        elements.push(<Separator key={index} className="my-6" />);
-      }
-      // Empty lines
-      else if (trimmedLine === '') {
-        flushList();
-        if (elements.length > 0 && elements[elements.length - 1].type !== 'hr') {
-          elements.push(<div key={index} className="mb-4" />);
-        }
-      }
-      // Regular paragraphs
-      else {
-        flushList();
-        // Process bold and italic
-        let processedLine = trimmedLine
-          .replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold">$1</strong>')
-          .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
-        
-        elements.push(
-          <p key={index} className="mb-4 text-foreground leading-relaxed" 
-             dangerouslySetInnerHTML={{ __html: processedLine }} />
-        );
-      }
-    });
-
-    flushList();
-    return elements;
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
+  // Function to generate consistent IDs for headings
+  const generateHeadingId = (text: string) => {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
   };
 
   return (
-    <div className={`prose prose-lg max-w-none ${className}`}>
-      {renderMarkdown(content)}
-    </div>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h1: ({ children }) => {
+          const id = generateHeadingId(children.toString());
+          return (
+            <h1 
+              id={id} 
+              className="scroll-mt-20 text-3xl font-bold mt-8 mb-6 text-foreground border-b pb-2"
+            >
+              {children}
+            </h1>
+          );
+        },
+        h2: ({ children }) => {
+          const id = generateHeadingId(children.toString());
+          return (
+            <h2 
+              id={id} 
+              className="scroll-mt-20 text-2xl font-semibold mt-8 mb-4 text-foreground"
+            >
+              {children}
+            </h2>
+          );
+        },
+        h3: ({ children }) => {
+          const id = generateHeadingId(children.toString());
+          return (
+            <h3 
+              id={id} 
+              className="scroll-mt-20 text-xl font-medium mt-6 mb-3 text-foreground"
+            >
+              {children}
+            </h3>
+          );
+        },
+        h4: ({ children }) => {
+          const id = generateHeadingId(children.toString());
+          return (
+            <h4 
+              id={id} 
+              className="scroll-mt-20 text-lg font-medium mt-4 mb-2 text-foreground"
+            >
+              {children}
+            </h4>
+          );
+        },
+        // Enhanced paragraph styling
+        p: ({ children }) => (
+          <p className="my-4 leading-7 text-foreground/90">
+            {children}
+          </p>
+        ),
+        // Enhanced list styling
+        ul: ({ children }) => (
+          <ul className="my-6 ml-6 list-disc [&>li]:mt-2">
+            {children}
+          </ul>
+        ),
+        ol: ({ children }) => (
+          <ol className="my-6 ml-6 list-decimal [&>li]:mt-2">
+            {children}
+          </ol>
+        ),
+        // Enhanced blockquote styling
+        blockquote: ({ children }) => (
+          <blockquote className="mt-6 border-l-2 pl-6 italic text-foreground/80">
+            {children}
+          </blockquote>
+        ),
+        // Code block styling
+        code: ({ node, inline, className, children, ...props }: {
+          node?: any;
+          inline?: boolean;
+          className?: string;
+          children: React.ReactNode;
+        }) => {
+          const match = /language-(\w+)/.exec(className || '');
+          return !inline && match ? (
+            <div className="my-6 rounded-lg overflow-hidden">
+              <SyntaxHighlighter
+                style={vscDarkPlus}
+                language={match[1]}
+                PreTag="div"
+                className="text-sm"
+                {...props}
+              >
+                {String(children).replace(/\n$/, '')}
+              </SyntaxHighlighter>
+            </div>
+          ) : (
+            <code 
+              className="px-1.5 py-0.5 rounded-sm bg-muted font-mono text-sm" 
+              {...props}
+            >
+              {children}
+            </code>
+          );
+        },
+        // Enhanced link styling
+        a: ({ children, href }) => (
+          <a 
+            href={href} 
+            className="text-primary underline underline-offset-4 hover:text-primary/80"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {children}
+          </a>
+        ),
+        // Enhanced table styling
+        table: ({ children }) => (
+          <div className="my-6 w-full overflow-y-auto">
+            <table className="w-full border-collapse text-sm">
+              {children}
+            </table>
+          </div>
+        ),
+        th: ({ children }) => (
+          <th className="border px-4 py-2 text-left font-medium bg-muted">
+            {children}
+          </th>
+        ),
+        td: ({ children }) => (
+          <td className="border px-4 py-2">
+            {children}
+          </td>
+        ),
+        hr: () => (
+          <hr className="my-8 border-muted" />
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
   );
-}; 
+};
+
+export default MarkdownRenderer; 

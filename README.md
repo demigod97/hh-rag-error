@@ -1,6 +1,6 @@
 # 🏙️ Town Planner RAG System
 
-A **multi‑LLM, retrieval‑augmented generation (RAG)** platform for town‑planning professionals. Upload planning documents (PDF/DOCX), extract structured data & metadata, ask contextual questions, and auto‑generate professional reports.
+A **multi‑LLM, retrieval‑augmented generation (RAG)** platform for town‑planning professionals. Upload planning documents (PDF/DOCX), extract structured data & metadata, ask contextual questions, and auto‑generate professional reports with enhanced UI/UX powered by **shadcn/ui**.
 
 ---
 
@@ -12,7 +12,8 @@ A **multi‑LLM, retrieval‑augmented generation (RAG)** platform for town‑pl
 | **Vector Search**        | Postgres **`vector`** extension + `chunk_embeddings` table for fast cosine similarity via `ivfflat` index |
 | **Multi‑LLM**            | Ollama (local), OpenAI, Gemini, LlamaCloud – switch per request; unified config via `LLM_DEFAULTS`        |
 | **Report Engine**        | Edge functions generate section queries, batch vector search, and draft content into **Markdown / DOCX**  |
-| **Realtime Workflows**   | n8n webhooks orchestrate chat, embedding jobs, and status updates                                         |
+| **Enhanced UI/UX**       | Modern **shadcn/ui** components with responsive design, real-time feedback, and professional report viewing |
+| **Realtime Workflows**   | n8n webhooks orchestrate chat, embedding jobs, and status updates with enhanced user feedback             |
 | **Secure, Multi‑Tenant** | Supabase Auth + RLS on every table; per‑user storage buckets                                              |
 
 ---
@@ -23,12 +24,14 @@ A **multi‑LLM, retrieval‑augmented generation (RAG)** platform for town‑pl
 ┌──────────────┐          ┌───────────────┐        ┌────────────────┐
 │  Frontend    │──files──▶│  Supabase      │──trig──▶ trigger-n8n    │
 │  (React/TS)  │  REST    │  (DB + Storage)│        │  Edge Function │
+│  + shadcn/ui │          │                │        │                │
 └──────────────┘          └──────┬─────────┘        └──────┬─────────┘
        ▲ WebSocket/HTTP               │ REST (RLS)                │ Webhooks  
        │                              ▼                          ▼
 ┌──────────────┐             ┌──────────────┐          ┌────────────────┐
 │    n8n        │◀──chat/───▶│    OpenAI    │  embed   │     n8n       │
 │  Workflows    │   ingest   │    Gemini    │───────▶ │   Webhooks    │
+│               │   reports  │    Ollama    │          │               │
 └──────────────┘             └──────────────┘          └────────────────┘
 ```
 
@@ -44,21 +47,33 @@ A **multi‑LLM, retrieval‑augmented generation (RAG)** platform for town‑pl
 │  │   ├─ generate-embeddings/
 │  │   ├─ batch-vector-search/
 │  │   ├─ generate-report/
-│  │   └─ process-report-sections/
+│  │   ├─ process-report-sections/
+│  │   └─ trigger-n8n/         # Main webhook router
 ├─ src/
+│  ├─ components/
+│  │   ├─ ui/                  # shadcn/ui components
+│  │   │   ├─ enhanced-report-viewer.tsx  # Advanced report rendering
+│  │   │   ├─ markdown-renderer.tsx       # Enhanced markdown parsing
+│  │   │   ├─ report-display.tsx          # JSON report detection
+│  │   │   └─ error-display.tsx           # Improved error handling
+│  │   ├─ ChatStream.tsx       # Real-time chat with enhanced feedback
+│  │   ├─ ReportsPanel.tsx     # Report management interface
+│  │   └─ ErrorBoundary.tsx    # Comprehensive error boundaries
 │  ├─ lib/
 │  │   ├─ api.ts               # Supabase client + helper SDK
-│  │   ├─ llm-config.ts        # LLM provider defaults
-│  │   └─ compatibility/       # api‑compatibility-functions.ts
-│  ├─ components/              # UI components (ChatStream, SourcesSidebar …)
-├─ n8n-workflows.json          # Import into n8n
-├─ deployment-setup-script.sh  # One‑click local install
-└─ README.md
+│  │   ├─ error-handling.ts    # Enhanced error management
+│  │   └─ session-management.ts # User session handling
+│  ├─ hooks/
+│  │   ├─ useErrorHandler.ts   # Global error handling
+│  │   └─ useNetworkStatus.ts  # Connection monitoring
+├─ claude-tasks/               # Claude AI integration scripts
+├─ cypress/                    # E2E testing suite
+└─ doc/                        # Comprehensive documentation
 ```
 
 ---
 
-## 🔧 Database Overview (Supabase Postgres v2.0)
+## 🔧 Database Overview (Supabase Postgres v2.0)
 
 <table>
 <tr><th>Category</th><th>Tables</th><th>Purpose</th></tr>
@@ -81,125 +96,397 @@ Row‑level security (RLS) enabled on every table; policies mirror `user_id` own
 
 ---
 
-## 🔌 Edge Functions
+## 🚀 Complete Setup & Workflow Guide
 
-| Function        | Description                                                                          |
-| --------------- | ------------------------------------------------------------------------------------ |
-| **trigger-n8n** | Routes all AI operations through n8n workflows:                                      |
-|                | • File upload → `https://n8n.coralshades.ai/webhook/ingest`                          |
-|                | • Chat/Reports → `https://n8n.coralshades.ai/webhook/hhlm-chat`                      |
-|                | Handles authentication, logging, and error handling for all n8n webhook interactions. |
+### 1. **Initial Setup**
 
-Function is JWT-authenticated and invoked via `supabase.functions.invoke()` from the frontend.
+```bash
+# 1. Clone and install dependencies
+git clone <repository-url>
+cd hh-rag-error
+npm install
+npm install -g supabase
+
+# 2. Configure environment
+cp .env.local.example .env.local
+# Edit .env.local with your credentials
+```
+
+### 2. **Database Setup**
+
+```bash
+# Link to your Supabase project
+supabase link --project-ref <your-project-ref>
+
+# Apply database migrations
+supabase db push
+
+# Generate TypeScript types
+npm run supabase:types
+```
+
+### 3. **Edge Functions Deployment**
+
+```bash
+# Deploy all edge functions
+npm run functions:deploy
+
+# Or deploy individually
+npm run functions:deploy:trigger
+supabase functions deploy generate-report
+supabase functions deploy process-report-sections
+```
+
+### 4. **n8n Workflows Setup**
+
+```bash
+# Start n8n (if using Docker)
+npm run docker:up
+
+# Or install locally
+npm install -g n8n
+n8n start
+
+# Import workflows from n8n-workflows.json
+# Configure webhooks at https://n8n.coralshades.ai/
+```
+
+### 5. **LLM Providers Setup**
+
+```bash
+# Option A: Local Ollama (recommended for development)
+ollama serve
+ollama pull qwen3:8b-q4_K_M
+ollama pull nomic-embed-text:latest
+
+# Option B: Configure API keys in .env.local
+# OPENAI_API_KEY=sk-...
+# GEMINI_API_KEY=AIza...
+```
+
+### 6. **Frontend Development**
+
+```bash
+# Start development server
+npm run dev
+
+# Open http://localhost:5173
+```
 
 ---
 
-## 🤖 n8n Workflows
+## 📋 Step-by-Step User Workflow
 
-1. **Document Ingest** – `/webhook/ingest` → processes uploads → generates embeddings → stores in Supabase
-2. **Chat/Report Handler** – `/webhook/hhlm-chat` → handles chat messages and report generation → streams responses
+### **Document Upload & Processing**
 
-All webhooks are hosted at `https://n8n.coralshades.ai/`. Configure environment variables and activate workflows in n8n dashboard.
+1. **Upload Document**
+   - Navigate to main interface
+   - Click "Upload Document" or drag & drop PDF/DOCX
+   - Enhanced UI shows upload progress with shadcn Progress component
+   - Files automatically stored in Supabase Storage with user-specific buckets
+
+2. **Processing Feedback**
+   - Real-time processing status with animated indicators
+   - Lottie animations for "thinking" states
+   - Toast notifications for status updates using shadcn Sonner
+   - Network status indicator shows connection health
+
+3. **Document Analysis**
+   - LlamaCloud OCR extracts text and preserves formatting
+   - AI automatically discovers metadata fields
+   - Semantic chunking maintains table structure
+   - Vector embeddings generated using configured provider
+
+### **Interactive Chat Experience**
+
+1. **Enhanced Chat Interface**
+   - Modern shadcn/ui Card-based message layout
+   - Real-time typing indicators with animated dots
+   - Network status monitoring with automatic reconnection
+   - Error boundaries prevent chat crashes
+
+2. **Message Feedback**
+   - Immediate send confirmation with CheckCircle icon
+   - Processing status: "Workflow was started" with animation
+   - Streaming responses with markdown rendering
+   - Citation popovers for document references
+
+3. **Error Handling**
+   - Graceful error displays with retry options
+   - Network disconnection alerts
+   - Fallback content for failed operations
+   - Comprehensive error logging
+
+### **Advanced Report Generation**
+
+1. **Report Creation**
+   - Access Reports Panel from main navigation
+   - Select from available templates
+   - Enhanced form with validation and real-time feedback
+   - Progress tracking with status badges
+
+2. **Report Viewing Experience**
+   - **Enhanced Report Viewer** with professional layout
+   - **Table of Contents** with section navigation
+   - **Figure References** as interactive popovers
+   - **Responsive Design** for mobile and desktop
+
+3. **Report Features**
+   - **Search functionality** within report sections
+   - **Collapsible sections** for better organization
+   - **Download/Print/Share** actions with proper styling
+   - **Active section highlighting** during scroll
+
+### **Advanced UI/UX Features**
+
+1. **Component Library (shadcn/ui)**
+   - Consistent design system across all interfaces
+   - Accessible components with proper ARIA labels
+   - Dark/light theme support
+   - Responsive breakpoints for all screen sizes
+
+2. **Enhanced Error Handling**
+   - Global error boundary with recovery options
+   - Specific error displays for different failure types
+   - User-friendly error messages with actionable advice
+   - Automatic retry mechanisms with exponential backoff
+
+3. **Performance Optimizations**
+   - Component lazy loading for faster initial render
+   - Virtual scrolling for large document lists
+   - Optimized re-renders with React.memo
+   - Efficient state management with React Query
 
 ---
 
-## ⚙️ Configuration
+## 🔌 Edge Functions & API Architecture
 
-### Environment (.env.local)
+| Function                    | Description                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| **trigger-n8n**            | Main router for all AI operations with enhanced error handling                      |
+| **generate-report**         | Creates structured reports with template support                                     |
+| **process-report-sections** | Handles individual report sections with batch processing                            |
+| **batch-vector-search**     | Optimized similarity search with result ranking                                     |
+| **process-pdf-with-metadata** | Enhanced document processing with metadata extraction                              |
+
+All functions include:
+- JWT authentication and rate limiting
+- Comprehensive error handling and logging
+- Type-safe request/response interfaces
+- Integration with n8n webhook system
+
+---
+
+## 🤖 AI Agent Integration
+
+See **[AGENTS.md](./AGENTS.md)** for detailed AI agent documentation including:
+- Document Processing Agent workflows
+- Chat/Report Generation Agent capabilities
+- Integration patterns with Edge Functions
+- Error handling and monitoring strategies
+
+---
+
+## ⚙️ Configuration & Environment
+
+### Environment Variables (.env.local)
 
 ```env
+# Supabase Configuration
 VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 
+# LLM Provider Keys
 OLLAMA_BASE_URL=http://localhost:11434
 OPENAI_API_KEY=sk-...
 GEMINI_API_KEY=AIza...
 LLAMACLOUD_API_KEY=llx-...
 
-N8N_WEBHOOK_BASE_URL=http://localhost:5678
+# n8n Integration
+N8N_WEBHOOK_BASE_URL=https://n8n.coralshades.ai
 N8N_API_KEY=...
+
+# Development Settings
+VITE_APP_ENV=development
+VITE_ENABLE_DEBUG=true
 ```
 
-### LLM Defaults (override per request)
+### LLM Provider Defaults
 
-| Provider | Chat Model        | Embed Model               | Temp |
-| -------- | ----------------- | ------------------------- | ---- |
-| Ollama   | `qwen3:8b-q4_K_M` | `nomic-embed-text:latest` | 0.3  |
-| OpenAI   | `gpt-4`           | `text-embedding-3-small`  | 0.3  |
-| Gemini   | `gemini-pro`      | `embedding-001`           | 0.3  |
+| Provider | Chat Model        | Embed Model               | Use Case               |
+| -------- | ----------------- | ------------------------- | ---------------------- |
+| Ollama   | `qwen3:8b-q4_K_M` | `nomic-embed-text:latest` | Local development      |
+| OpenAI   | `gpt-4o`          | `text-embedding-3-small`  | Production quality     |
+| Gemini   | `gemini-pro`      | `embedding-001`           | Google ecosystem       |
+| LlamaCloud | `llama-3.1-70b` | `llama-embed-large`       | Document processing    |
 
 ---
 
-## 🚀 Quick Start
+## 🧪 Testing & Development Scripts
 
 ```bash
-# 1. Install deps
-npm i && npm i -g supabase
+# Development helpers
+npm run claude:check          # Integration health check
+npm run claude:dev            # Development tasks
+npm run claude:health         # Service health monitoring
 
-# 2. Configure env & link project
-cp .env.local.example .env.local
-supabase link --project-ref <ref>
+# Supabase operations
+npm run supabase:types        # Regenerate TypeScript types
+npm run supabase:reset        # Reset local database
+npm run supabase:migrate      # Apply migrations
 
-# 3. Provision database
-supabase db push
+# Function management
+npm run functions:deploy      # Deploy all functions
+npm run functions:logs        # Monitor function logs
 
-# 4. Deploy edge functions
-./deploy-functions.sh
+# Service management
+npm run docker:up             # Start all services
+npm run docker:down           # Stop all services
+npm run logs:n8n              # n8n container logs
+npm run logs:supabase         # Supabase logs
 
-# 5. Seed storage buckets & templates (optional)
-
-# 6. Start n8n & Ollama
-npx n8n  &  ollama serve &
-
-# 7. Run dev frontend
-npm run dev
+# Testing
+npm run test:supabase         # Test database connection
+npm run lint                  # Code quality checks
 ```
 
-Open [http://localhost:5173](http://localhost:5173) → create notebook → upload PDF → chat & generate report.
+---
+
+## 📈 Monitoring & Troubleshooting
+
+### Health Checks
+
+```bash
+# Check all services
+npm run claude:health
+
+# Individual service checks
+supabase status
+curl http://localhost:11434/api/tags  # Ollama
+curl http://localhost:5678/healthz   # n8n
+```
+
+### Log Monitoring
+
+```bash
+# Real-time function logs
+npm run functions:logs:trigger
+
+# Database queries (enable log_statement = 'all')
+supabase logs --type postgres
+
+# n8n workflow executions
+npm run logs:n8n
+```
+
+### Common Issues & Solutions
+
+| Issue | Symptoms | Solution |
+|-------|----------|----------|
+| **Upload failures** | Files not processing | Check n8n webhook connectivity |
+| **Chat not responding** | Messages stuck "processing" | Verify LLM provider connection |
+| **Reports not generating** | Empty report panel | Check report templates in database |
+| **UI components broken** | Missing styles/functionality | Reinstall shadcn components |
 
 ---
 
-## 🧪 Testing
+## 🛡️ Security & Production Checklist
 
-* **Supabase**: `supabase status`
-* **Edge Log**: `supabase functions logs --tail`
-* **Chat Webhook**:
+### Development
+- [x] Environment variables in `.env.local`
+- [x] Local Supabase with development keys
+- [x] CORS enabled for localhost
+- [x] Debug logging enabled
 
-  ```bash
-  curl -X POST http://localhost:5678/webhook/hhlm-chat -H 'Content-Type: application/json' -d '{"sessionId":"test","message":"Hello"}'
-  ```
-
----
-
-## 📈 Monitoring & Scaling
-
-| Layer     | Tip                                                                |
-| --------- | ------------------------------------------------------------------ |
-| DB        | Enable **point‑in‑time recovery** and log **pg\_stat\_statements** |
-| Functions | Use Supabase **Edge run‑metrics** + Langfuse for LLM observability |
-| n8n       | Persist executions, set retries, and add failure hooks             |
-| LLMs      | Cache embeddings (Redis) and stream chat completions               |
+### Production
+- [ ] Environment variables in hosting platform
+- [ ] Production Supabase project
+- [ ] CORS restricted to your domain
+- [ ] API keys stored as Supabase secrets
+- [ ] Rate limiting configured
+- [ ] Error monitoring (Sentry/similar)
+- [ ] Performance monitoring
+- [ ] Database backups enabled
 
 ---
 
-## 🛡️ Security Checklist
+## 🚀 Deployment Options
 
-* [x] API keys stored as Supabase **secrets** (service role only)
-* [x] RLS policies enforced (see `*.sql`)
-* [x] Storage bucket ACL = private per‑user
-* [x] CORS `*` only for dev; tighten in prod
+### **Option A: Vercel + Supabase (Recommended)**
+```bash
+# Frontend deployment
+vercel deploy
+
+# Edge Functions auto-deploy with Supabase CLI
+supabase functions deploy --project-ref <prod-ref>
+```
+
+### **Option B: Docker Compose**
+```bash
+# Build production image
+docker build -t town-planner-rag .
+
+# Deploy with docker-compose
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+### **Option C: Self-hosted**
+```bash
+# Build static files
+npm run build
+
+# Serve with your preferred web server
+# Configure reverse proxy for API routes
+```
 
 ---
 
-## 👥 Contributing
+## 👥 Contributing & Development
 
-1. Fork & create feature branch (`git checkout -b feat/awesome`)
-2. Run `npm run lint && npm run test`
-3. Submit PR with context & screenshots
+### Getting Started
+1. Fork repository and create feature branch
+2. Install dependencies: `npm install`
+3. Run development environment: `npm run dev`
+4. Make changes with proper TypeScript types
+5. Test with: `npm run lint && npm run test:supabase`
+6. Submit PR with clear description and screenshots
+
+### Code Standards
+- **TypeScript**: Strict mode enabled, proper types required
+- **ESLint**: Follow configured rules, fix all warnings
+- **shadcn/ui**: Use existing components, follow design system
+- **Error Handling**: Use error boundaries and proper try-catch
+- **Testing**: Add tests for new functionality
+
+### Component Development
+- Use shadcn/ui components as base
+- Follow accessibility guidelines (ARIA labels)
+- Implement proper loading and error states
+- Ensure mobile responsiveness
+- Add proper TypeScript interfaces
 
 ---
 
-## 📜 License
+## 📜 License & Credits
 
-MIT © 2025 CoralShades – Built with ❤️ in Melbourne
+**MIT License** © 2025 CoralShades  
+Built with ❤️ in Melbourne
+
+### Key Technologies
+- **Frontend**: React, TypeScript, Vite, shadcn/ui, Tailwind CSS
+- **Backend**: Supabase (PostgreSQL + Auth + Storage)
+- **AI/ML**: Ollama, OpenAI, Google Gemini, LlamaCloud
+- **Automation**: n8n workflows
+- **Deployment**: Vercel, Docker
+
+### Special Thanks
+- shadcn for the amazing UI component library
+- Supabase team for the comprehensive backend platform
+- n8n community for workflow automation tools
+- Open source contributors and the developer community
+
+---
+
+*For detailed AI agent documentation, see [AGENTS.md](./AGENTS.md)*  
+*For troubleshooting guides, see [doc/debugging-realtime-chat.md](./doc/debugging-realtime-chat.md)*
