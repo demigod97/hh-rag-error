@@ -1,0 +1,423 @@
+{
+  "workflows": [
+    {
+      "name": "Town Planner - Chat Handler",
+      "description": "Handles chat requests with RAG and multi-LLM support",
+      "nodes": [
+        {
+          "parameters": {
+            "httpMethod": "POST",
+            "path": "hhlm-chat",
+            "options": {}
+          },
+          "id": "webhook-chat",
+          "name": "Chat Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "typeVersion": 1,
+          "position": [250, 300]
+        },
+        {
+          "parameters": {
+            "functionCode": "// Extract request data\nconst { sessionId, message, context, history, llm_provider, llm_config } = items[0].json;\n\n// Format context for LLM\nconst contextText = context && context.length > 0 \n  ? 'Context from documents:\\n' + context.join('\\n\\n---\\n\\n')\n  : 'No specific context available.';\n\n// Format conversation history\nconst historyText = history && history.length > 0\n  ? history.slice(-10).map(m => `${m.role}: ${m.content}`).join('\\n')\n  : '';\n\n// Prepare system prompt\nconst systemPrompt = `You are a knowledgeable town planning assistant. Use the provided context to answer questions accurately. If the context doesn't contain relevant information, use your general knowledge but indicate when you're doing so.`;\n\nreturn {\n  json: {\n    sessionId,\n    message,\n    contextText,\n    historyText,\n    systemPrompt,\n    llm_provider: llm_provider || 'ollama',\n    llm_config: llm_config || {}\n  }\n};"
+          },
+          "id": "prepare-context",
+          "name": "Prepare Context",
+          "type": "n8n-nodes-base.functionItem",
+          "typeVersion": 1,
+          "position": [450, 300]
+        },
+        {
+          "parameters": {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json.llm_provider }}",
+                  "operation": "equals",
+                  "value2": "ollama"
+                }
+              ]
+            }
+          },
+          "id": "switch-llm",
+          "name": "LLM Router",
+          "type": "n8n-nodes-base.switch",
+          "typeVersion": 1,
+          "position": [650, 300]
+        },
+        {
+          "parameters": {
+            "url": "http://localhost:11434/api/generate",
+            "options": {},
+            "bodyParametersUi": {
+              "parameter": [
+                {
+                  "name": "model",
+                  "value": "={{ $json.llm_config.model || 'qwen3:8b-q4_K_M' }}"
+                },
+                {
+                  "name": "prompt",
+                  "value": "={{ $json.systemPrompt }}\\n\\nConversation History:\\n{{ $json.historyText }}\\n\\n{{ $json.contextText }}\\n\\nUser: {{ $json.message }}\\n\\nAssistant:"
+                },
+                {
+                  "name": "stream",
+                  "value": false
+                },
+                {
+                  "name": "options",
+                  "value": "={{ {temperature: $json.llm_config.temperature || 0.3} }}"
+                }
+              ]
+            }
+          },
+          "id": "ollama-generate",
+          "name": "Ollama Generate",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 1,
+          "position": [850, 200]
+        },
+        {
+          "parameters": {
+            "url": "https://api.openai.com/v1/chat/completions",
+            "authentication": "genericCredentialType",
+            "genericAuthType": "httpHeaderAuth",
+            "options": {},
+            "bodyParametersUi": {
+              "parameter": [
+                {
+                  "name": "model",
+                  "value": "={{ $json.llm_config.model || 'gpt-4' }}"
+                },
+                {
+                  "name": "messages",
+                  "value": "={{ [{role: 'system', content: $json.systemPrompt}, {role: 'user', content: $json.historyText + '\\n\\n' + $json.contextText + '\\n\\nUser: ' + $json.message}] }}"
+                },
+                {
+                  "name": "temperature",
+                  "value": "={{ $json.llm_config.temperature || 0.3 }}"
+                }
+              ]
+            }
+          },
+          "id": "openai-generate",
+          "name": "OpenAI Generate",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 1,
+          "position": [850, 300],
+          "credentials": {
+            "httpHeaderAuth": {
+              "id": "1",
+              "name": "OpenAI API"
+            }
+          }
+        },
+        {
+          "parameters": {
+            "functionCode": "// Extract response based on provider\nconst provider = items[0].json.llm_provider;\nlet content = '';\n\nif (provider === 'ollama') {\n  content = items[0].json.response;\n} else if (provider === 'openai') {\n  content = items[0].json.choices[0].message.content;\n} else if (provider === 'gemini') {\n  content = items[0].json.candidates[0].content.parts[0].text;\n}\n\nreturn {\n  json: {\n    content: content,\n    sessionId: items[0].json.sessionId,\n    provider: provider\n  }\n};"
+          },
+          "id": "format-response",
+          "name": "Format Response",
+          "type": "n8n-nodes-base.functionItem",
+          "typeVersion": 1,
+          "position": [1050, 300]
+        }
+      ],
+      "connections": {
+        "webhook-chat": {
+          "main": [
+            [
+              {
+                "node": "prepare-context",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "prepare-context": {
+          "main": [
+            [
+              {
+                "node": "switch-llm",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "switch-llm": {
+          "main": [
+            [
+              {
+                "node": "ollama-generate",
+                "type": "main",
+                "index": 0
+              }
+            ],
+            [
+              {
+                "node": "openai-generate",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "ollama-generate": {
+          "main": [
+            [
+              {
+                "node": "format-response",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "openai-generate": {
+          "main": [
+            [
+              {
+                "node": "format-response",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "name": "Town Planner - Embedding Generator",
+      "description": "Generates embeddings for document chunks",
+      "nodes": [
+        {
+          "parameters": {
+            "httpMethod": "POST",
+            "path": "generate-embeddings",
+            "options": {}
+          },
+          "id": "webhook-embeddings",
+          "name": "Embeddings Webhook",
+          "type": "n8n-nodes-base.webhook",
+          "typeVersion": 1,
+          "position": [250, 300]
+        },
+        {
+          "parameters": {
+            "authentication": "genericCredentialType",
+            "genericAuthType": "httpHeaderAuth",
+            "url": "={{ $env.SUPABASE_URL }}/rest/v1/document_chunks",
+            "options": {
+              "queryParametersUi": {
+                "parameter": [
+                  {
+                    "name": "id",
+                    "value": "in.({{ $json.chunk_ids.join(',') }})"
+                  }
+                ]
+              }
+            }
+          },
+          "id": "get-chunks",
+          "name": "Get Chunks",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 1,
+          "position": [450, 300]
+        },
+        {
+          "parameters": {
+            "batchSize": 10,
+            "options": {}
+          },
+          "id": "split-batches",
+          "name": "Split into Batches",
+          "type": "n8n-nodes-base.splitInBatches",
+          "typeVersion": 1,
+          "position": [650, 300]
+        },
+        {
+          "parameters": {
+            "conditions": {
+              "string": [
+                {
+                  "value1": "={{ $json.embedding_provider }}",
+                  "operation": "equals",
+                  "value2": "ollama"
+                }
+              ]
+            }
+          },
+          "id": "switch-embedding-provider",
+          "name": "Embedding Provider",
+          "type": "n8n-nodes-base.switch",
+          "typeVersion": 1,
+          "position": [850, 300]
+        },
+        {
+          "parameters": {
+            "url": "http://localhost:11434/api/embeddings",
+            "options": {},
+            "bodyParametersUi": {
+              "parameter": [
+                {
+                  "name": "model",
+                  "value": "nomic-embed-text:latest"
+                },
+                {
+                  "name": "prompt",
+                  "value": "={{ $json.content }}"
+                }
+              ]
+            }
+          },
+          "id": "ollama-embedding",
+          "name": "Ollama Embedding",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 1,
+          "position": [1050, 200]
+        },
+        {
+          "parameters": {
+            "functionCode": "// Store embeddings in Supabase\nconst chunk = items[0].json;\nconst embedding = chunk.embedding;\n\n// Format for Supabase vector type\nconst vectorString = `[${embedding.join(',')}]`;\n\nreturn {\n  json: {\n    chunk_id: chunk.id,\n    notebook_id: chunk.notebook_id,\n    embedding: vectorString,\n    embedding_model: `${chunk.embedding_provider}-${chunk.model_name}`,\n    embedding_dimension: embedding.length,\n    metadata: {\n      section_title: chunk.section_title,\n      chunk_type: chunk.chunk_type\n    }\n  }\n};"
+          },
+          "id": "format-embedding",
+          "name": "Format Embedding",
+          "type": "n8n-nodes-base.functionItem",
+          "typeVersion": 1,
+          "position": [1250, 300]
+        },
+        {
+          "parameters": {
+            "authentication": "genericCredentialType",
+            "genericAuthType": "httpHeaderAuth",
+            "method": "POST",
+            "url": "={{ $env.SUPABASE_URL }}/rest/v1/chunk_embeddings",
+            "options": {
+              "headers": {
+                "Prefer": "return=representation"
+              }
+            },
+            "bodyParametersUi": {
+              "parameter": [
+                {
+                  "name": "=",
+                  "value": "={{ $json }}"
+                }
+              ]
+            }
+          },
+          "id": "store-embedding",
+          "name": "Store Embedding",
+          "type": "n8n-nodes-base.httpRequest",
+          "typeVersion": 1,
+          "position": [1450, 300]
+        }
+      ],
+      "connections": {
+        "webhook-embeddings": {
+          "main": [
+            [
+              {
+                "node": "get-chunks",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "get-chunks": {
+          "main": [
+            [
+              {
+                "node": "split-batches",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "split-batches": {
+          "main": [
+            [
+              {
+                "node": "switch-embedding-provider",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "switch-embedding-provider": {
+          "main": [
+            [
+              {
+                "node": "ollama-embedding",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "ollama-embedding": {
+          "main": [
+            [
+              {
+                "node": "format-embedding",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "format-embedding": {
+          "main": [
+            [
+              {
+                "node": "store-embedding",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        },
+        "store-embedding": {
+          "main": [
+            [
+              {
+                "node": "split-batches",
+                "type": "main",
+                "index": 0
+              }
+            ]
+          ]
+        }
+      }
+    }
+  ],
+  "credentials": {
+    "httpHeaderAuth": {
+      "OpenAI API": {
+        "name": "Authorization",
+        "value": "Bearer YOUR_OPENAI_API_KEY"
+      },
+      "Supabase API": {
+        "name": "apikey",
+        "value": "YOUR_SUPABASE_ANON_KEY"
+      }
+    }
+  },
+  "variables": [
+    {
+      "key": "SUPABASE_URL",
+      "value": "https://your-project.supabase.co"
+    },
+    {
+      "key": "SUPABASE_ANON_KEY",
+      "value": "your-anon-key"
+    },
+    {
+      "key": "N8N_API_KEY",
+      "value": "your-n8n-api-key"
+    }
+  ]
+}

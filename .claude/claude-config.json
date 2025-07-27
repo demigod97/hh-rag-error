@@ -1,0 +1,72 @@
+{
+"name": "town-planner-rag-system",
+"description": "SvelteKit/Vite town‑planning app integrated with Supabase edge functions, n8n workflows, and local LLM providers (Ollama / OpenAI / Gemini)",
+"version": "2.0.0",
+"claude\_code": {
+"project\_type": "web\_application",
+"tech\_stack": \[
+"SvelteKit",
+"TypeScript",
+"Vite",
+"Supabase (Postgres + Storage + Edge Functions)",
+"n8n",
+"Tailwind CSS",
+"Ollama / OpenAI / Gemini"
+],
+"primary\_directories": \[
+"src/",
+"supabase/",
+"n8n-workflows.json",
+"DOC/",
+"scripts/"
+],
+"ignore\_patterns": \[
+"node\_modules/",
+"dist/",
+"build/",
+".git/",
+"*.log"
+],
+"development\_tasks": {
+"integration\_check": {
+"description": "Verify local CLI integration (Supabase, n8n, Ollama). Ensure env vars, edge-function deployment, and webhook connectivity are correct.",
+"files": \[
+"supabase/",
+"supabase/migrations/",
+"supabase/functions/",
+"n8n-workflows.json",
+".env.local"
+]
+},
+"workflow\_validation": {
+"description": "Validate n8n workflows and Supabase triggers/webhooks.",
+"files": \[
+"n8n-workflows.json",
+"supabase/functions/*/index.ts"
+]
+},
+"code\_review": {
+"description": "Review Svelte components, stores, and API integration for best practices.",
+"files": \[
+"src/components/",
+"src/routes/",
+"src/lib/"
+]
+},
+"database\_check": {
+"description": "Validate Supabase schema migrations (v2.0) and RLS policies.",
+"files": \[
+"supabase/migrations/",
+"supabase/migrations/\*"
+]
+}
+},
+"ai\_assistant\_rules": \[
+"Always consult TASKS.md for current priorities.",
+"Follow architecture guidelines in AGENTS.md.",
+"Ensure edge functions and n8n webhooks are connected before merging code.",
+"Validate environment variable consistency across .env.local, deployment scripts, and CI workflows.",
+"Write code and docs in strict TypeScript / Markdown style guidelines."
+]
+}
+}

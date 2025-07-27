@@ -1,0 +1,59 @@
+{
+  "project\_context": {
+  "prompt": "You are helping with a **SvelteKit/Vite** town‑planning application that uses **Supabase** (Postgres + Storage + Edge Functions) for the backend and **n8n** for workflow automation. The app ingests PDF documents, extracts structured metadata, generates embeddings, and provides multi‑LLM chat plus report generation. Focus on front‑end ↔ back‑end integration, Supabase edge functions, n8n orchestration, streaming UI, and performance/security best practices.",
+  "context\_files": \[
+  "TASKS.md",
+  "AGENTS.md",
+  "README.md",
+  "integration-report.json",
+  "package.json"
+  ]
+  },
+  "integration\_check": {
+  "prompt": "Check the integration status of the town‑planner app running **locally without Docker**. Verify project structure, environment variables ( .env.local ), Supabase schema & RLS, edge‑function deployment, n8n webhook configuration, Ollama/OpenAI credentials, and Langfuse telemetry hooks. Provide specific, actionable recommendations for any issues discovered.",
+  "files": \[
+  "supabase/",
+  "supabase/migrations/",
+  "supabase/functions/",
+  "n8n-workflows.json",
+  ".env.local"
+  ]
+  },
+  "code\_review": {
+  "prompt": "Review the **SvelteKit/TypeScript** code for best practices, potential issues, and integration patterns. Focus on Supabase client usage, edge‑function invocation, streaming APIs, error handling, TypeScript types, and component architecture. Ensure code follows modern SvelteKit patterns and idiomatic Tailwind styling.",
+  "files": \[
+  "src/components/",
+  "src/routes/",
+  "src/lib/",
+  "src/stores/",
+  "src/app.d.ts"
+  ]
+  },
+  "workflow\_debug": {
+  "prompt": "Help debug **n8n** workflow issues and Supabase edge‑function integration. Inspect webhook endpoints, authentication headers, data flow between tables (`processing_jobs`, `sources`, `chunk_embeddings`), and real‑time updates. Provide step‑by‑step troubleshooting guidance.",
+  "files": \[
+  "n8n-workflows.json",
+  "supabase/functions/",
+  "supabase/migrations/",
+  "src/lib/",
+  "src/routes/api/"
+  ]
+  },
+  "local\_services\_setup": {
+  "prompt": "Assist with configuring local services (Supabase CLI, n8n, Ollama) **without Docker**. Review CLI commands, ports, environment variables, and startup scripts to ensure all services run and interconnect correctly on localhost.",
+  "files": \[
+  "deployment-setup-script.sh",
+  ".env.local",
+  "package.json"
+  ]
+  },
+  "frontend\_development": {
+  "prompt": "Help with **SvelteKit/Vite** front‑end development. Review component architecture, state management (Svelte stores & TanStack Query), API integration, TypeScript usage, styling with Tailwind CSS + shadcn/ui, and user experience. Emphasize file upload flow, streaming chat interface, and real‑time processing indicators.",
+  "files": \[
+  "src/",
+  "vite.config.ts",
+  "tsconfig.json",
+  "tailwind.config.ts"
+  ]
+  }
+}

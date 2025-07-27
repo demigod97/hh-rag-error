@@ -1,0 +1,64 @@
+name: "🐞 Bug Report"
+description: "Report a reproducible problem in HHLM"
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+        
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to Reproduce"
+      description: "What did you do? Please provide clear steps."
+      placeholder: |
+        1. Go to...
+        2. Click on...
+        3. Scroll down to...
+        4. See error
+    validations:
+      required: true
+      
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected Behavior"
+      description: "What should have happened?"
+      placeholder: "A clear description of what you expected to happen."
+    validations:
+      required: true
+      
+  - type: textarea
+    id: actual
+    attributes:
+      label: "Actual Behavior"
+      description: "What actually happened?"
+      placeholder: "A clear description of what actually happened instead."
+    validations:
+      required: true
+      
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Environment"
+      description: "Please provide relevant environment details"
+      placeholder: |
+        - Browser: Chrome 120.0
+        - OS: macOS 14.1
+        - Node version: 18.17
+        - HHLM version: v1.0.0
+        
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Console Logs / Screenshots"
+      description: "If applicable, add console logs or screenshots to help explain your problem."
+      placeholder: "Paste console errors or drag and drop screenshots here."
+      
+  - type: textarea
+    id: additional
+    attributes:
+      label: "Additional Context"
+      description: "Add any other context about the problem here."

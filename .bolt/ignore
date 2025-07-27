@@ -1,0 +1,9 @@
+claude-tasks/*
+.claude/*
+DOCUMENTATION AND INSTRUCTIONS/n8n
+DOCUMENTATION AND INSTRUCTIONS/deployment-setup-script.sh
+DOCUMENTATION AND INSTRUCTIONS/n8n-workflows.json
+DOCUMENTATION AND INSTRUCTIONS/town-planner-complete-schema.sql
+supabase/.temp
+supabase/migrations/town-planner-complete-schema.sql
+.vscode/*
