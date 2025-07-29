@@ -2,8 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = "https://ttbcziwdfkorkopgouar.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR0YmN6aXdkZmtvcmtvcGdvdWFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4OTcyMDAsImV4cCI6MjA2ODQ3MzIwMH0.YXh5oftmlBmjW3Ql774QpR5cWHWWHuI-qL6pzoHuUik";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://zjhuphfoeqbjssqnqmwu.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpqaHVwaGZvZXFianNzcW5xbXd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMyODcyMTUsImV4cCI6MjA2ODg2MzIxNX0.-nYgJNEZ9L1yBHMOUODxXd3SKDwhE-FajlzMJm-9v0o";
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
@@ -13,5 +13,38 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+  },
+  realtime: {
+    // Enhanced realtime configuration for better reliability
+    params: {
+      eventsPerSecond: 10
+    },
+    heartbeatIntervalMs: 30000,
+    reconnectAfterMs: (tries: number) => {
+      // Exponential backoff: 1s, 2s, 4s, 8s, then 10s max
+      return Math.min(1000 * Math.pow(2, tries), 10000);
+    },
+    logger: import.meta.env.DEV ? ((...args: unknown[]) => console.log(...args)) : undefined,
+    timeout: 20000
+  },
+  db: {
+    schema: 'public'
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'town-planner-realtime-chat'
+    }
   }
 });
+
+// Enhanced logging for debugging realtime
+if (import.meta.env.DEV) {
+  console.log('🔧 Supabase Client Configuration:');
+  console.log('URL:', SUPABASE_URL);
+  console.log('Realtime enabled:', !!supabase.realtime);
+  
+  // Test connection on init
+  supabase.auth.onAuthStateChange((event, session) => {
+    console.log('🔐 Auth state changed:', event, session?.user?.id);
+  });
+}

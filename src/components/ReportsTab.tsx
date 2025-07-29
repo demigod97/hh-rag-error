@@ -23,6 +23,7 @@ interface Report {
   file_path?: string;
   file_format: string;
   file_size?: number;
+  generated_content?: string;
   created_at: string;
   completed_at?: string;
   progress: number;
@@ -48,7 +49,20 @@ export const ReportsTab = ({ notebookId }: ReportsTabProps) => {
       return handleAsyncError(async () => {
         const { data, error } = await supabase
           .from("report_generations")
-          .select("*")
+          .select(`
+            id,
+            title,
+            topic,
+            address,
+            status,
+            file_path,
+            file_format,
+            file_size,
+            generated_content,
+            progress,
+            created_at,
+            completed_at
+          `)
           .eq("notebook_id", notebookId)
           .order("created_at", { ascending: false });
         
@@ -132,7 +146,24 @@ export const ReportsTab = ({ notebookId }: ReportsTabProps) => {
     }
   };
 
-
+  // Utility function to determine actual report status
+  const getActualStatus = (report: Report) => {
+    // If report has content or file_path, it's likely completed even if status says otherwise
+    if (report.file_path || (report.generated_content && report.generated_content.trim())) {
+      return 'completed';
+    }
+    
+    // If created more than 10 minutes ago and still "processing", it's likely failed
+    const createdTime = new Date(report.created_at).getTime();
+    const now = Date.now();
+    const minutesSinceCreated = (now - createdTime) / (1000 * 60);
+    
+    if ((report.status === 'processing' || report.status === 'pending') && minutesSinceCreated > 10) {
+      return 'failed';
+    }
+    
+    return report.status;
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -222,8 +253,8 @@ export const ReportsTab = ({ notebookId }: ReportsTabProps) => {
                       </p>
                     </div>
                     <div className="flex items-center gap-2 ml-2">
-                      <Badge variant={getStatusColor(report.status)} className="text-xs">
-                        {report.status}
+                      <Badge variant={getStatusColor(getActualStatus(report))} className="text-xs">
+                        {getActualStatus(report)}
                       </Badge>
                       <Button
                         variant="ghost"

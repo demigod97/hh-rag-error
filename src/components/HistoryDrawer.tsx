@@ -1,14 +1,18 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { History, MessageSquare, Plus } from "lucide-react";
+import { History, MessageSquare, Plus, MoreHorizontal, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarNewChatButton } from "@/components/NewChatButton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { supabase } from "@/lib/api";
 import { LoadingWithError } from "@/components/ui/error-display";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
+import { useSessionManager } from "@/lib/session-management";
+import { toast } from "@/hooks/use-toast";
 
 // Define proper TypeScript interfaces to prevent undefined errors
 interface ChatSession {
@@ -30,6 +34,7 @@ interface HistoryDrawerProps {
 export function HistoryDrawer({ onSessionSelect, currentSessionId }: HistoryDrawerProps) {
   const [open, setOpen] = useState(false);
   const { handleAsyncError } = useErrorHandler();
+  const { createNewSession } = useSessionManager();
 
   // Safe session fetching with proper error handling
   const getChatSessions = async (): Promise<ChatSession[]> => {
@@ -52,7 +57,7 @@ export function HistoryDrawer({ onSessionSelect, currentSessionId }: HistoryDraw
       }
 
       // Ensure all required fields are present and properly typed
-      return (sessions || []).map((session: any): ChatSession => ({
+      return (sessions || []).map((session): ChatSession => ({
         id: session.id || '',
         title: session.title || null,
         created_at: session.created_at || new Date().toISOString(),
@@ -76,59 +81,7 @@ export function HistoryDrawer({ onSessionSelect, currentSessionId }: HistoryDraw
     throwOnError: false
   });
 
-  // Safe session creation with proper error handling
-  const createNewSession = async (): Promise<string> => {
-    return await handleAsyncError(async () => {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) {
-        throw new Error('User authentication required');
-      }
-
-      // Get or create default notebook
-      let notebookId: string;
-      const { data: notebooks, error: notebookError } = await supabase
-        .from('notebooks')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1)
-        .single();
-
-      if (notebookError || !notebooks) {
-        // Create default notebook
-        const { data: newNotebook, error: createError } = await supabase
-          .from('notebooks')
-          .insert({
-            user_id: user.id,
-            name: 'Default Notebook',
-            project_type: 'general',
-            project_status: 'active'
-          })
-          .select('id')
-          .single();
-
-        if (createError) throw createError;
-        notebookId = newNotebook.id;
-      } else {
-        notebookId = notebooks.id;
-      }
-
-      // Create new chat session
-      const { data: session, error: sessionError } = await supabase
-        .from('chat_sessions')
-        .insert({
-          user_id: user.id,
-          notebook_id: notebookId,
-          title: `Chat - ${new Date().toLocaleString()}`,
-          total_messages: 0,
-          is_active: true
-        })
-        .select('id')
-        .single();
-
-      if (sessionError) throw sessionError;
-      return session.id;
-    }, { operation: 'create_new_session' });
-  };
+  // Using createNewSession from useSessionManager to prevent duplication
 
   // Safe session click handler with null checks
   const handleSessionClick = (sessionId: string | undefined) => {
@@ -146,10 +99,10 @@ export function HistoryDrawer({ onSessionSelect, currentSessionId }: HistoryDraw
     }
   };
 
-  // Safe new session handler
+  // Safe new session handler using sessionManager
   const handleNewSession = async () => {
     try {
-      const newSessionId = await createNewSession();
+      const newSessionId = await createNewSession(); // This uses useSessionManager's createNewSession
       if (newSessionId && typeof newSessionId === 'string') {
         onSessionSelect(newSessionId);
         setOpen(false);
@@ -200,6 +153,86 @@ export function HistoryDrawer({ onSessionSelect, currentSessionId }: HistoryDraw
     }
   };
 
+  // Delete single session
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      // @ts-expect-error - Database function not in generated types yet
+      const { error } = await supabase.rpc('delete_chat_session_cascade', {
+        session_id: sessionId
+      });
+
+      if (error) {
+        console.error('Error deleting session:', error);
+        throw error;
+      }
+
+      // If we're deleting the current session, select a new one or create one
+      if (currentSessionId === sessionId) {
+        const remainingSessions = sessions?.filter(s => s.id !== sessionId) || [];
+        if (remainingSessions.length > 0) {
+          onSessionSelect(remainingSessions[0].id);
+        } else {
+          // Create a new session if no sessions remain
+          const newSessionId = await createNewSession();
+          if (newSessionId) {
+            onSessionSelect(newSessionId);
+          }
+        }
+      }
+
+      // Refetch sessions to update the list
+      refetch();
+      
+      toast({
+        title: "Session deleted",
+        description: "Chat session and all its messages have been deleted.",
+      });
+
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+      toast({
+        title: "Deletion failed",
+        description: "Failed to delete chat session. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Delete all chat history
+  const handleDeleteAllHistory = async () => {
+    try {
+      // @ts-expect-error - Database function not in generated types yet
+      const { error } = await supabase.rpc('delete_all_user_chat_history');
+
+      if (error) {
+        console.error('Error deleting all chat history:', error);
+        throw error;
+      }
+
+      // Create a new session since all were deleted
+      const newSessionId = await createNewSession();
+      if (newSessionId) {
+        onSessionSelect(newSessionId);
+      }
+
+      // Refetch sessions to update the list
+      refetch();
+      
+      toast({
+        title: "All history deleted",
+        description: "All chat sessions and messages have been deleted.",
+      });
+
+    } catch (error) {
+      console.error('Failed to delete all chat history:', error);
+      toast({
+        title: "Deletion failed",
+        description: "Failed to delete chat history. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
@@ -211,20 +244,50 @@ export function HistoryDrawer({ onSessionSelect, currentSessionId }: HistoryDraw
         <SheetHeader>
           <SheetTitle className="flex items-center justify-between">
             Chat History
-            <SidebarNewChatButton
-              notebookId={undefined} // Will use default notebook
-              onNewSession={(sessionId) => {
-                onSessionSelect(sessionId);
-                setOpen(false); // Close the drawer
-              }}
-              currentSessionId={currentSessionId}
-              showConfirmation={true}
-              variant="outline"
-              size="sm"
-              iconOnly={true}
-              label="New Chat"
-              className="h-8 w-8"
-            />
+            <div className="flex items-center gap-2">
+              <SidebarNewChatButton
+                notebookId={undefined} // Will use default notebook
+                onNewSession={(sessionId) => {
+                  onSessionSelect(sessionId);
+                  setOpen(false); // Close the drawer
+                }}
+                currentSessionId={currentSessionId}
+                showConfirmation={true}
+                size="sm"
+                iconOnly={true}
+                label="New Chat"
+                className="h-8 w-8"
+              />
+              {sessions && sessions.length > 0 && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 w-8 p-0" title="Clear all history">
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-destructive" />
+                        Clear All Chat History
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete all your chat sessions and messages. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={handleDeleteAllHistory}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete All History
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
           </SheetTitle>
         </SheetHeader>
         
@@ -266,13 +329,15 @@ export function HistoryDrawer({ onSessionSelect, currentSessionId }: HistoryDraw
                   return (
                     <div
                       key={session.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${
+                      className={`group flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors ${
                         isCurrentSession ? 'bg-muted border-primary' : ''
                       }`}
-                      onClick={() => handleSessionClick(session.id)}
                     >
                       <MessageSquare className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
+                      <div 
+                        className="flex-1 min-w-0 cursor-pointer"
+                        onClick={() => handleSessionClick(session.id)}
+                      >
                         <div className="font-medium truncate" title={sessionTitle}>
                           {sessionTitle}
                         </div>
@@ -285,6 +350,61 @@ export function HistoryDrawer({ onSessionSelect, currentSessionId }: HistoryDraw
                           )}
                         </div>
                       </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSessionClick(session.id);
+                            }}
+                          >
+                            <MessageSquare className="h-4 w-4 mr-2" />
+                            Open Session
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <DropdownMenuItem 
+                                className="text-destructive focus:text-destructive"
+                                onSelect={(e) => e.preventDefault()}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete Session
+                              </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle className="flex items-center gap-2">
+                                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                                  Delete Chat Session
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently delete "{sessionTitle}" and all its messages. This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={() => handleDeleteSession(session.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete Session
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   );
                 })}

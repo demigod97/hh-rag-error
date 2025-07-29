@@ -22,6 +22,7 @@ import {
   Plus,
   Settings
 } from "lucide-react";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { supabase } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
@@ -40,6 +41,7 @@ interface Report {
   file_path?: string;
   file_format: string;
   file_size?: number;
+  generated_content?: string;
   created_at: string;
   completed_at?: string;
   progress: number;
@@ -81,7 +83,20 @@ export const ReportsPanel = ({ notebookId }: ReportsPanelProps) => {
       return handleAsyncError(async () => {
         const { data, error } = await supabase
           .from("report_generations")
-          .select("*")
+          .select(`
+            id,
+            title,
+            topic,
+            address,
+            status,
+            file_path,
+            file_format,
+            file_size,
+            generated_content,
+            progress,
+            created_at,
+            completed_at
+          `)
           .eq("notebook_id", notebookId)
           .order("created_at", { ascending: false });
         
@@ -238,6 +253,25 @@ export const ReportsPanel = ({ notebookId }: ReportsPanelProps) => {
 
 
 
+  // Utility function to determine actual report status
+  const getActualStatus = (report: Report) => {
+    // If report has content or file_path, it's likely completed even if status says otherwise
+    if (report.file_path || (report.generated_content && report.generated_content.trim())) {
+      return 'completed';
+    }
+    
+    // If created more than 10 minutes ago and still "processing", it's likely failed
+    const createdTime = new Date(report.created_at).getTime();
+    const now = Date.now();
+    const minutesSinceCreated = (now - createdTime) / (1000 * 60);
+    
+    if ((report.status === 'processing' || report.status === 'pending') && minutesSinceCreated > 10) {
+      return 'failed';
+    }
+    
+    return report.status;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
@@ -273,19 +307,10 @@ export const ReportsPanel = ({ notebookId }: ReportsPanelProps) => {
 
   return (
     <ComponentErrorBoundary>
-      <div className="w-[380px] bg-sidebar-custom border-l h-full flex flex-col">
+      <div className="w-[380px] bg-sidebar-custom border-l h-full flex flex-col" data-reports-panel>
         <div className="p-4 border-b">
           <div className="flex items-center justify-between mb-1">
             <h2 className="font-medium text-foreground">Reports</h2>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowNewReportDialog(true)}
-              className="h-8"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              New
-            </Button>
           </div>
           <p className="text-sm text-muted-foreground">Generate and manage planning reports.</p>
         </div>
@@ -317,17 +342,6 @@ export const ReportsPanel = ({ notebookId }: ReportsPanelProps) => {
                     <p className="text-sm text-muted-foreground">
                       {searchTerm ? "No reports match your search" : "No reports generated yet"}
                     </p>
-                    {!searchTerm && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowNewReportDialog(true)}
-                        className="mt-3"
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Generate First Report
-                      </Button>
-                    )}
                   </div>
                 ) : (
                   filteredReports.map((report) => (
@@ -346,8 +360,8 @@ export const ReportsPanel = ({ notebookId }: ReportsPanelProps) => {
                           </p>
                         </div>
                         <div className="flex items-center gap-2 ml-2">
-                          <Badge variant={getStatusColor(report.status)} className="text-xs">
-                            {report.status}
+                          <Badge variant={getStatusColor(getActualStatus(report))} className="text-xs">
+                            {getActualStatus(report)}
                           </Badge>
                           <Button
                             variant="ghost"
@@ -385,7 +399,7 @@ export const ReportsPanel = ({ notebookId }: ReportsPanelProps) => {
                         )}
                       </div>
                       
-                      {report.status === 'processing' && (
+                      {getActualStatus(report) === 'processing' && (
                         <div className="mt-3">
                           <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                             <span>Progress</span>
@@ -492,6 +506,11 @@ export const ReportsPanel = ({ notebookId }: ReportsPanelProps) => {
         {/* Report Content Modal */}
         <Dialog open={!!selectedReport} onOpenChange={(open) => !open && closeModal()}>
           <DialogContent className="max-w-7xl max-h-[95vh] overflow-hidden p-0">
+            <VisuallyHidden>
+              <DialogTitle>
+                {selectedReport?.title || 'Planning Report'}
+              </DialogTitle>
+            </VisuallyHidden>
             <DialogDescription className="sr-only">
               View and download the generated planning report content with enhanced navigation and search.
             </DialogDescription>

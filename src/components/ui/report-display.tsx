@@ -6,6 +6,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
+import { getReportContent } from '@/lib/api';
 import { 
   FileText, 
   MapPin, 
@@ -17,7 +18,9 @@ import {
   Share2,
   Printer,
   Maximize2,
-  Minimize2
+  Minimize2,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -26,8 +29,13 @@ interface ReportData {
   topic: string;
   address?: string;
   markdown?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: {
+    reportId?: string;
+    [key: string]: unknown;
+  };
   timestamp?: string;
+  id?: string;
+  report_id?: string;
 }
 
 interface ReportDisplayProps {
@@ -39,6 +47,9 @@ export const ReportDisplay: React.FC<ReportDisplayProps> = ({ data, className = 
   const [isExpanded, setIsExpanded] = useState(true);
   const [showActions, setShowActions] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [reportContent, setReportContent] = useState(data.markdown || '');
+  const [isLoadingContent, setIsLoadingContent] = useState(false);
+  const [contentError, setContentError] = useState<string | null>(null);
 
   // Extract sections from markdown for better navigation
   const extractSections = (markdown: string) => {
@@ -90,12 +101,48 @@ export const ReportDisplay: React.FC<ReportDisplayProps> = ({ data, className = 
     return sections;
   };
 
-  const sections = data.markdown ? extractSections(data.markdown) : [];
+  // Effect to fetch report content if needed
+  useEffect(() => {
+    const fetchContentIfNeeded = async () => {
+      // If we already have content, no need to fetch
+      if (reportContent && reportContent.trim()) {
+        console.log('📊 Report already has content, using directly');
+        return;
+      }
+
+      // Check if we have a report ID to fetch from database
+      const reportId = data.metadata?.reportId || data.id || data.report_id;
+      if (!reportId) {
+        console.warn('⚠️ No markdown content and no report ID to fetch from database');
+        setContentError('No report content or ID available');
+        return;
+      }
+
+      console.log('🔄 Fetching report content from database for ID:', reportId);
+      setIsLoadingContent(true);
+      setContentError(null);
+
+      try {
+        const content = await getReportContent(reportId);
+        console.log('✅ Successfully fetched report content:', content.length, 'characters');
+        setReportContent(content);
+      } catch (err) {
+        console.error('❌ Failed to fetch report content:', err);
+        setContentError(`Failed to load report: ${err.message}`);
+      } finally {
+        setIsLoadingContent(false);
+      }
+    };
+
+    fetchContentIfNeeded();
+  }, [data, reportContent]);
+
+  const sections = reportContent ? extractSections(reportContent) : [];
 
   const handleDownload = () => {
-    if (!data.markdown) return;
+    if (!reportContent) return;
     
-    const blob = new Blob([data.markdown], { type: 'text/markdown' });
+    const blob = new Blob([reportContent], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -111,7 +158,7 @@ export const ReportDisplay: React.FC<ReportDisplayProps> = ({ data, className = 
   };
 
   const handleShare = async () => {
-    if (navigator.share && data.markdown) {
+    if (navigator.share && reportContent) {
       try {
         await navigator.share({
           title: data.topic,
@@ -276,7 +323,21 @@ export const ReportDisplay: React.FC<ReportDisplayProps> = ({ data, className = 
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
         <CollapsibleContent>
           <CardContent className="pt-0">
-            {!data.markdown ? (
+            {isLoadingContent ? (
+              <Alert>
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <AlertDescription>
+                  Loading report content...
+                </AlertDescription>
+              </Alert>
+            ) : contentError ? (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  {contentError}
+                </AlertDescription>
+              </Alert>
+            ) : !reportContent ? (
               <Alert>
                 <AlertDescription>
                   Report content is not available or still being generated.
@@ -329,7 +390,7 @@ export const ReportDisplay: React.FC<ReportDisplayProps> = ({ data, className = 
                     : 'max-h-[70vh]'
                 }`}>
                   <div className="prose prose-sm max-w-none">
-                    <MarkdownRenderer content={data.markdown} />
+                    <MarkdownRenderer content={reportContent} />
                   </div>
                 </ScrollArea>
               </div>
@@ -340,7 +401,7 @@ export const ReportDisplay: React.FC<ReportDisplayProps> = ({ data, className = 
                    : 'max-h-[70vh]'
                }`}>
                  <div className="prose prose-sm max-w-none">
-                   <MarkdownRenderer content={data.markdown} />
+                   <MarkdownRenderer content={reportContent} />
                  </div>
                </ScrollArea>
              )}

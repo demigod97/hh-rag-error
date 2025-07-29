@@ -28,6 +28,10 @@
     "functions:deploy:n8n-proxy": "supabase functions deploy n8n-proxy --no-verify-jwt",
     "functions:deploy:trigger": "supabase functions deploy trigger-n8n --no-verify-jwt",
     "functions:logs": "supabase functions logs",
+    "validate:realtime": "node scripts/validate-supabase-realtime.js",
+    "test:auth": "node scripts/create-test-user.js",
+    "setup:supabase": "bash scripts/setup-supabase-cloud.sh",
+    "setup:supabase:win": "powershell -ExecutionPolicy Bypass -File scripts/setup-supabase-cloud.ps1",
     "functions:logs:proxy": "supabase functions logs n8n-proxy",
     "functions:logs:trigger": "supabase functions logs trigger-n8n"
   },
@@ -70,6 +74,7 @@
     "cmdk": "^1.0.0",
     "cypress": "^14.5.2",
     "date-fns": "^3.6.0",
+    "dotenv": "^17.2.1",
     "embla-carousel-react": "^8.3.0",
     "globby": "^14.1.0",
     "input-otp": "^1.2.4",

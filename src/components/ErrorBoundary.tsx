@@ -1,9 +1,12 @@
 import React from 'react';
-import { AlertTriangle, RefreshCw, Wifi, WifiOff, Bug } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Wifi, WifiOff, Bug, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { ErrorHandler } from '@/lib/error-handling';
 
 interface ErrorFallbackProps {
@@ -12,9 +15,14 @@ interface ErrorFallbackProps {
   context?: string;
 }
 
+interface ErrorStats {
+  total: number;
+  bySeverity: Record<string, number>;
+}
+
 export const ErrorFallback: React.FC<ErrorFallbackProps> = ({ error, retry, context }) => {
   const [showDetails, setShowDetails] = React.useState(false);
-  const [errorStats, setErrorStats] = React.useState<any>(null);
+  const [errorStats, setErrorStats] = React.useState<ErrorStats | null>(null);
 
   React.useEffect(() => {
     // Get error statistics for debugging
@@ -37,108 +45,156 @@ export const ErrorFallback: React.FC<ErrorFallbackProps> = ({ error, retry, cont
     // Copy to clipboard for easy reporting
     navigator.clipboard.writeText(JSON.stringify(errorReport, null, 2));
     
-    // Show success message
-    alert('Error report copied to clipboard. Please share this with support.');
+    // Show success message with better UX
+    const originalText = document.querySelector('[data-error-report-btn]')?.textContent;
+    const btn = document.querySelector('[data-error-report-btn]') as HTMLElement;
+    if (btn) {
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => {
+        btn.textContent = originalText || 'Copy Error Report';
+      }, 2000);
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-50">
-      <Card className="w-full max-w-lg">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-            <AlertTriangle className="h-6 w-6 text-destructive" />
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background to-muted/20">
+      <Card className="w-full max-w-2xl shadow-lg">
+        <CardHeader className="text-center space-y-4">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 border-2 border-destructive/20">
+            <AlertTriangle className="h-8 w-8 text-destructive" />
           </div>
-          <CardTitle>Something went wrong</CardTitle>
-          <CardDescription>
-            {context ? `Error in ${context}` : 'An unexpected error occurred'}
-          </CardDescription>
+          <div className="space-y-2">
+            <CardTitle className="text-2xl">Something went wrong</CardTitle>
+            <CardDescription className="text-base">
+              {context ? `An error occurred in ${context}` : 'An unexpected error has occurred in the application'}
+            </CardDescription>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Error Statistics */}
-          {errorStats && (
-            <Alert>
-              <Bug className="h-4 w-4" />
-              <AlertTitle>Error Statistics</AlertTitle>
-              <AlertDescription>
-                <div className="flex gap-2 mt-2">
-                  <Badge variant="outline">Total: {errorStats.total}</Badge>
-                  {Object.entries(errorStats.bySeverity).map(([severity, count]) => (
-                    <Badge key={severity} variant="secondary">
-                      {severity}: {count as number}
+        
+        <CardContent className="space-y-6">
+          {/* System Status Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Error Statistics Card */}
+            {errorStats && (
+              <Card className="border-orange-200 bg-orange-50/50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Bug className="h-4 w-4 text-orange-600" />
+                    Error Statistics
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline" className="border-orange-300">
+                      Total: {errorStats.total}
                     </Badge>
-                  ))}
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Network Status */}
-          <Alert>
-            {navigator.onLine ? (
-              <Wifi className="h-4 w-4" />
-            ) : (
-              <WifiOff className="h-4 w-4" />
-            )}
-            <AlertTitle>Connection Status</AlertTitle>
-            <AlertDescription>
-              {navigator.onLine ? 'Online' : 'Offline - Some features may be limited'}
-            </AlertDescription>
-          </Alert>
-
-          {/* Error Details (Development only) */}
-          {import.meta.env.DEV && error && (
-            <div className="space-y-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDetails(!showDetails)}
-                className="w-full"
-              >
-                {showDetails ? 'Hide' : 'Show'} Technical Details
-              </Button>
-              
-              {showDetails && (
-                <details className="rounded border p-3 text-sm bg-muted">
-                  <summary className="cursor-pointer font-medium mb-2">
-                    Error Information
-                  </summary>
-                  <div className="space-y-2">
-                    <div>
-                      <strong>Message:</strong> {error.message}
-                    </div>
-                    <div>
-                      <strong>Context:</strong> {context || 'Unknown'}
-                    </div>
-                    {error.stack && (
-                      <div>
-                        <strong>Stack Trace:</strong>
-                        <pre className="mt-1 text-xs whitespace-pre-wrap bg-background p-2 rounded">
-                          {error.stack}
-                        </pre>
-                      </div>
-                    )}
+                    {Object.entries(errorStats.bySeverity).map(([severity, count]) => (
+                      <Badge key={severity} variant="secondary" className="bg-orange-100">
+                        {severity}: {count as number}
+                      </Badge>
+                    ))}
                   </div>
-                </details>
-              )}
-            </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Network Status Card */}
+            <Card className={`border-2 ${navigator.onLine ? 'border-green-200 bg-green-50/50' : 'border-red-200 bg-red-50/50'}`}>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  {navigator.onLine ? (
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                  )}
+                  Connection Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <Badge variant={navigator.onLine ? "default" : "destructive"} className="text-xs">
+                  {navigator.onLine ? 'Online' : 'Offline'}
+                </Badge>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {navigator.onLine ? 'All systems operational' : 'Some features may be limited'}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Separator />
+
+          {/* Error Details - Development only */}
+          {import.meta.env.DEV && error && (
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between"
+                  onClick={() => setShowDetails(!showDetails)}
+                >
+                  <span className="flex items-center gap-2">
+                    <Bug className="h-4 w-4" />
+                    Technical Details
+                  </span>
+                  {showDetails ? <RefreshCw className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                </Button>
+              </CollapsibleTrigger>
+              
+              <CollapsibleContent className="mt-4">
+                <Card className="bg-muted/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm">Error Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground mb-1">Message:</p>
+                        <p className="text-sm text-muted-foreground bg-background p-2 rounded border">
+                          {error.message}
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <p className="text-sm font-medium text-foreground mb-1">Context:</p>
+                        <Badge variant="outline">{context || 'Unknown'}</Badge>
+                      </div>
+                      
+                      {error.stack && (
+                        <div>
+                          <p className="text-sm font-medium text-foreground mb-2">Stack Trace:</p>
+                          <ScrollArea className="h-32 w-full rounded border bg-background">
+                            <pre className="p-3 text-xs font-mono whitespace-pre-wrap">
+                              {error.stack}
+                            </pre>
+                          </ScrollArea>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
           )}
 
           {/* Action Buttons */}
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Button 
               onClick={() => window.location.reload()} 
-              variant="outline" 
+              variant="default" 
               className="flex-1"
+              size="lg"
             >
               <RefreshCw className="mr-2 h-4 w-4" />
-              Reload Page
+              Reload Application
             </Button>
             {retry && (
-              <Button onClick={retry} className="flex-1">
+              <Button onClick={retry} variant="outline" className="flex-1" size="lg">
                 Try Again
               </Button>
             )}
           </div>
+
+          <Separator />
 
           {/* Report Error Button */}
           <Button 
@@ -146,6 +202,7 @@ export const ErrorFallback: React.FC<ErrorFallbackProps> = ({ error, retry, cont
             variant="ghost" 
             size="sm" 
             className="w-full"
+            data-error-report-btn
           >
             <Bug className="mr-2 h-4 w-4" />
             Copy Error Report
@@ -169,15 +226,19 @@ export const ComponentErrorBoundary: React.FC<{
   );
 };
 
-class ErrorBoundaryWrapper extends React.Component<
-  { 
-    children: React.ReactNode; 
-    fallback: React.ComponentType<ErrorFallbackProps>;
-    context?: string;
-  },
-  { hasError: boolean; error?: Error }
-> {
-  constructor(props: any) {
+interface ErrorBoundaryWrapperProps {
+  children: React.ReactNode; 
+  fallback: React.ComponentType<ErrorFallbackProps>;
+  context?: string;
+}
+
+interface ErrorBoundaryWrapperState {
+  hasError: boolean; 
+  error?: Error;
+}
+
+class ErrorBoundaryWrapper extends React.Component<ErrorBoundaryWrapperProps, ErrorBoundaryWrapperState> {
+  constructor(props: ErrorBoundaryWrapperProps) {
     super(props);
     this.state = { hasError: false };
   }
