@@ -17,6 +17,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
+import { Citation } from "@/types/citation";
+import SourceContentViewer from "@/components/ui/source-content-viewer";
 
 interface Source {
   id: string;
@@ -38,6 +40,9 @@ interface UploadProgress {
 
 interface SourcesSidebarProps {
   notebookId: string;
+  selectedCitation?: Citation | null;
+  onCitationClose?: () => void;
+  setSelectedCitation?: (citation: Citation | null) => void;
 }
 
 const formatFileSize = (bytes: number) => {
@@ -48,7 +53,12 @@ const formatFileSize = (bytes: number) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 };
 
-export const SourcesSidebar = ({ notebookId }: SourcesSidebarProps) => {
+export const SourcesSidebar = ({ 
+  notebookId, 
+  selectedCitation, 
+  onCitationClose, 
+  setSelectedCitation 
+}: SourcesSidebarProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<Record<string, boolean>>({});
   const [uploadProgress, setUploadProgress] = useState<Record<string, UploadProgress>>({});
@@ -264,6 +274,46 @@ export const SourcesSidebar = ({ notebookId }: SourcesSidebarProps) => {
     setUploadError("");
   };
 
+  const handleSourceClick = (source: Source) => {
+    if (!setSelectedCitation) return;
+    
+    // Create a mock citation for source preview (similar to template)
+    const mockCitation: Citation = {
+      citation_id: -1, // -1 indicates source list click (no specific citation)
+      source_id: source.id,
+      source_title: source.display_name,
+      source_type: getSourceTypeFromName(source.display_name),
+      // No chunk_lines_from/to = no highlighting/auto-scroll
+      excerpt: `Full content of ${source.display_name}`,
+      document: {
+        pageContent: `Loading content for ${source.display_name}...`, // This would be fetched in real implementation
+        metadata: {
+          title: source.display_name,
+          file_size: source.file_size,
+          processing_status: source.processing_status
+        }
+      }
+    };
+    
+    setSelectedCitation(mockCitation);
+  };
+
+  const getSourceTypeFromName = (fileName: string): string => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return 'pdf';
+      case 'txt':
+      case 'md':
+        return 'text';
+      case 'doc':
+      case 'docx':
+        return 'doc';
+      default:
+        return 'text';
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
@@ -315,6 +365,33 @@ export const SourcesSidebar = ({ notebookId }: SourcesSidebarProps) => {
     );
   }
 
+  // If a citation is selected, show the source content viewer
+  if (selectedCitation) {
+    return (
+      <ComponentErrorBoundary>
+        <div className="h-full bg-card flex flex-col">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h3 className="font-semibold">Source Details</h3>
+            <button 
+              onClick={onCitationClose}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <SourceContentViewer
+              citation={selectedCitation}
+              sourceContent={selectedCitation.document?.pageContent || selectedCitation.excerpt}
+              className="h-full"
+            />
+          </div>
+        </div>
+      </ComponentErrorBoundary>
+    );
+  }
+
+  // Default view: show sources list
   return (
     <ComponentErrorBoundary>
       <div className="w-[260px] bg-sidebar-custom border-r h-full flex flex-col">
@@ -480,7 +557,10 @@ export const SourcesSidebar = ({ notebookId }: SourcesSidebarProps) => {
                 onCheckedChange={(checked) => handleFileToggle(source.id, !!checked)}
                 className="mt-0.5"
               />
-              <div className="flex-1 min-w-0">
+              <div 
+                className="flex-1 min-w-0 cursor-pointer"
+                onClick={() => handleSourceClick(source)}
+              >
                 <p className="text-sm font-medium text-foreground leading-tight mb-1">
                   {source.display_name}
                 </p>

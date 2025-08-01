@@ -4,6 +4,8 @@ import { ChatStream } from "./ChatStream";
 import { ReportsPanel } from "./ReportsPanel";
 import { ComponentErrorBoundary } from "@/components/ErrorBoundary";
 import { useSessionManager } from "@/lib/session-management";
+import { SourcesSidebar } from "@/components/SourcesSidebar";
+import { Citation } from "@/types/citation";
 
 interface TownPlannerLayoutProps {
   sessionId: string;
@@ -12,6 +14,7 @@ interface TownPlannerLayoutProps {
 
 export const TownPlannerLayout = ({ sessionId, notebookId = "default" }: TownPlannerLayoutProps) => {
   const [currentSessionId, setCurrentSessionId] = useState(sessionId);
+  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
   const { switchSession, createNewSession } = useSessionManager();
 
 
@@ -42,6 +45,15 @@ export const TownPlannerLayout = ({ sessionId, notebookId = "default" }: TownPla
     }
   };
 
+  const handleCitationClick = (citation: Citation) => {
+    setSelectedCitation(citation);
+    console.log('Citation clicked:', citation);
+  };
+
+  const handleCitationClose = () => {
+    setSelectedCitation(null);
+  };
+
   return (
     <ComponentErrorBoundary>
       <div className="h-full flex flex-col bg-background overflow-hidden">
@@ -53,17 +65,28 @@ export const TownPlannerLayout = ({ sessionId, notebookId = "default" }: TownPla
         />
         
         <div className="flex-1 flex overflow-hidden min-h-0">
-          {/* Chat Area */}
-          <div className="flex-1 min-w-0">
+                {/* Sources Panel - Left */}
+      <div className={`hidden lg:block border-r border-border ${selectedCitation ? 'w-[30%]' : 'w-[25%]'} flex-shrink-0`}>
+        <SourcesSidebar 
+          notebookId={notebookId}
+          selectedCitation={selectedCitation}
+          onCitationClose={handleCitationClose}
+          setSelectedCitation={setSelectedCitation}
+        />
+      </div>
+          
+          {/* Chat Area - Center */}
+          <div className={`flex-1 min-w-0 ${selectedCitation ? 'lg:w-[40%]' : 'lg:w-[50%]'}`}>
             <ChatStream 
               sessionId={currentSessionId} 
               notebookId={notebookId}
               onNewSession={handleSessionSelect}
+              onCitationClick={handleCitationClick}
             />
           </div>
           
-          {/* Desktop Reports Panel */}
-          <div className="hidden lg:block">
+          {/* Reports Panel - Right */}
+          <div className={`hidden lg:block border-l border-border ${selectedCitation ? 'w-[30%]' : 'w-[25%]'} flex-shrink-0`}>
             <ReportsPanel notebookId={notebookId} />
           </div>
         </div>

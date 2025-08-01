@@ -168,7 +168,7 @@ export async function sendChatMessage(
         session_id: sessionId,
         user_id: user.id,
         role: 'user',
-        content: message
+        message: message
       })
       .select()
       .single()
@@ -188,7 +188,7 @@ export async function sendChatMessage(
         session_id: sessionId,
         user_id: user.id,
         role: 'assistant',
-        content: result.aiMessage.content,
+        message: result.aiMessage.content,
         llm_provider: 'ollama',
         llm_model: 'qwen3:8b-q4_K_M'
       })

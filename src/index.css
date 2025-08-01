@@ -339,3 +339,109 @@ All colors MUST be HSL.
     }
   }
 }
+
+/* Notebook LM-inspired Citation Styles */
+.citation-link {
+  @apply inline-flex items-center gap-1;
+  position: relative;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: all 0.2s ease-in-out;
+}
+
+.citation-link:hover {
+  @apply bg-blue-50 dark:bg-blue-950/30;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.1);
+}
+
+.citation-link sup {
+  @apply inline-flex items-center justify-center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+  transition: all 0.2s ease-in-out;
+}
+
+.citation-link:hover sup {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+.citation-content {
+  @apply leading-relaxed;
+}
+
+.citation-content .citation-link {
+  @apply mx-0.5;
+}
+
+/* Citation popover styling */
+[data-radix-popper-content-wrapper] .citation-popover {
+  @apply shadow-lg border-0;
+  animation: citationFadeIn 0.2s ease-out;
+}
+
+@keyframes citationFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Enhanced citation card styling */
+.citation-card {
+  @apply bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg;
+  background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06),
+    0 0 0 1px rgba(59, 130, 246, 0.05);
+}
+
+.dark .citation-card {
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.3),
+    0 2px 4px -1px rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(59, 130, 246, 0.1);
+}
+
+/* Smooth transitions for interactive elements */
+.citation-link,
+.citation-card,
+.citation-link sup {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Focus states for accessibility */
+.citation-link:focus-visible {
+  @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+}
+
+/* Print styles for citations */
+@media print {
+  .citation-link {
+    @apply text-blue-800;
+    text-decoration: underline;
+  }
+  
+  .citation-link sup {
+    @apply bg-blue-800 text-white;
+    box-shadow: none;
+  }
+  
+  /* Hide citation popover content in print */
+  [data-radix-popper-content-wrapper] {
+    display: none !important;
+  }
+}

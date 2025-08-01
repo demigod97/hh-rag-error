@@ -187,7 +187,7 @@ export async function sendChatWithErrorHandling(
                 session_id: sessionId,
                 user_id: user.id,
                 role: 'user',
-                content: message,
+                message: message,
               })
               .select()
               .single();

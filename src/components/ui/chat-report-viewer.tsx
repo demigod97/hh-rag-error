@@ -33,6 +33,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Citation } from '@/types/citation';
+import { EnhancedMarkdownRenderer } from '@/components/ui/enhanced-markdown-renderer';
 
 // Advanced Report Content Parser and Renderer
 interface ParsedSection {
@@ -174,7 +176,12 @@ const FigureReference: React.FC<{ figure: FigureReference }> = ({ figure }) => (
 );
 
 // Enhanced Text Renderer
-const TextRenderer: React.FC<{ content: string, figures: FigureReference[] }> = ({ content, figures }) => {
+const TextRenderer: React.FC<{ 
+  content: string, 
+  figures: FigureReference[], 
+  chunks?: unknown[], 
+  sources?: unknown[] 
+}> = ({ content, figures, chunks = [], sources = [] }) => {
   // Replace figure references with components
   const processText = (text: string) => {
     const figureRegex = /\[{"pageContent":"([^"]+)","metadata":({[^}]*})}\]/g;
@@ -182,7 +189,19 @@ const TextRenderer: React.FC<{ content: string, figures: FigureReference[] }> = 
     
     return parts.map((part, index) => {
       if (index % 3 === 0) {
-        // Regular text
+        // Regular text - check for citations
+        const hasCitations = /(?:Chunk #\d+|Citation \d+|Source \d+|\[\d+\])/i.test(part) && 
+                           (chunks.length > 0 || sources.length > 0);
+        
+        if (hasCitations) {
+          // For reports, render text as-is since citations are handled at chat level
+          return (
+            <span key={index} className="leading-relaxed">
+              {part}
+            </span>
+          );
+        }
+        
         return (
           <span key={index} className="leading-relaxed">
             {part}
@@ -263,8 +282,10 @@ const SectionComponent: React.FC<{
   section: ParsedSection, 
   figures: FigureReference[], 
   activeSection: string,
-  onSectionClick: (id: string) => void 
-}> = ({ section, figures, activeSection, onSectionClick }) => {
+  onSectionClick: (id: string) => void,
+  chunks?: unknown[],
+  sources?: unknown[]
+}> = ({ section, figures, activeSection, onSectionClick, chunks = [], sources = [] }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   
   const HeadingComponent = ({ level, children, id }: { level: number, children: React.ReactNode, id: string }) => {
@@ -332,7 +353,7 @@ const SectionComponent: React.FC<{
         <CollapsibleContent className="space-y-4">
           {section.content.trim() && (
             <div className="pl-4 border-l-2 border-muted">
-              <TextRenderer content={section.content} figures={figures} />
+              <TextRenderer content={section.content} figures={figures} chunks={chunks} sources={sources} />
             </div>
           )}
           
@@ -343,6 +364,8 @@ const SectionComponent: React.FC<{
                 figures={figures}
                 activeSection={activeSection}
                 onSectionClick={onSectionClick}
+                chunks={chunks}
+                sources={sources}
               />
             </div>
           ))}
@@ -353,7 +376,11 @@ const SectionComponent: React.FC<{
 };
 
 // Enhanced Content Renderer using shadcn/ui components
-const ContentRenderer: React.FC<{ content: string }> = ({ content }) => {
+const ContentRenderer: React.FC<{ 
+  content: string, 
+  chunks?: unknown[], 
+  sources?: unknown[] 
+}> = ({ content, chunks = [], sources = [] }) => {
   const [activeSection, setActiveSection] = useState<string>('');
   
   const { sections, figures } = parseReportContent(content);
@@ -448,6 +475,8 @@ const ContentRenderer: React.FC<{ content: string }> = ({ content }) => {
             figures={figures}
             activeSection={activeSection}
             onSectionClick={handleSectionClick}
+            chunks={chunks}
+            sources={sources}
           />
         ))}
       </div>
@@ -725,7 +754,11 @@ export const ChatReportViewer: React.FC<ChatReportViewerProps> = ({
                     </AlertDescription>
                   </Alert>
                 ) : (
-                  <ContentRenderer content={content} />
+                  <ContentRenderer 
+                    content={content} 
+                    chunks={(metadata?.chunks_retrieved as unknown[]) || []}
+                    sources={(metadata?.sources_cited as unknown[]) || []}
+                  />
                 )}
               </div>
             </ScrollArea>

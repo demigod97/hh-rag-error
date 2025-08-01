@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
+import { EnhancedMarkdownRenderer } from '@/components/ui/enhanced-markdown-renderer';
 import { getReportContent } from '@/lib/api';
 import { 
   FileText, 
@@ -390,7 +390,7 @@ export const ReportDisplay: React.FC<ReportDisplayProps> = ({ data, className = 
                     : 'max-h-[70vh]'
                 }`}>
                   <div className="prose prose-sm max-w-none">
-                    <MarkdownRenderer content={reportContent} />
+                    <EnhancedMarkdownRenderer content={reportContent} />
                   </div>
                 </ScrollArea>
               </div>
@@ -401,7 +401,7 @@ export const ReportDisplay: React.FC<ReportDisplayProps> = ({ data, className = 
                    : 'max-h-[70vh]'
                }`}>
                  <div className="prose prose-sm max-w-none">
-                   <MarkdownRenderer content={reportContent} />
+                   <EnhancedMarkdownRenderer content={reportContent} />
                  </div>
                </ScrollArea>
              )}

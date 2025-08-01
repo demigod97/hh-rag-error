@@ -15,7 +15,7 @@ import { InlineError } from "@/components/ui/error-display";
 import { FloatingNewChatButton } from "@/components/NewChatButton";
 import { NetworkIndicator } from "@/components/NetworkStatus";
 import { supabase } from "@/lib/api";
-import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
+import { EnhancedMarkdownRenderer } from '@/components/ui/enhanced-markdown-renderer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
@@ -25,6 +25,7 @@ import { EnhancedReportViewer } from '@/components/ui/enhanced-report-viewer';
 import { ChatReportViewer } from '@/components/ui/chat-report-viewer';
 import { ReportLink } from '@/components/ui/report-link';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Citation, transformChunksToCitations, parseContentToSegments, EnhancedContent } from '@/types/citation';
 import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -90,6 +91,7 @@ interface ChatStreamProps {
   sessionId: string;
   notebookId?: string;
   onNewSession?: (sessionId: string) => void;
+  onCitationClick?: (citation: Citation) => void;
 }
 
 interface ReportFallbackData {
@@ -270,13 +272,13 @@ const AsyncReportRenderer: React.FC<{
 };
 
 /**
- * Enhanced content renderer with better UX
+ * Enhanced content renderer with template-style citations
  */
-const renderMessageContent = (message: Message): JSX.Element => {
-  return renderMessageContentInternal(message.content, message.metadata);
+const renderMessageContent = (message: Message, onCitationClick?: (citation: Citation) => void): JSX.Element => {
+  return renderMessageContentInternal(message.content, message.metadata, onCitationClick);
 };
 
-const renderMessageContentInternal = (content: unknown, metadata?: Record<string, unknown>): JSX.Element => {
+const renderMessageContentInternal = (content: unknown, metadata?: Record<string, unknown>, onCitationClick?: (citation: Citation) => void): JSX.Element => {
   try {
     // Handle null/undefined
     if (content == null) {
@@ -444,49 +446,84 @@ const renderMessageContentInternal = (content: unknown, metadata?: Record<string
         }
       }
 
+      // Check if we have citation data from chunks_retrieved
+      const chunksRetrieved = (metadata?.chunks_retrieved as unknown[]) || [];
+      const sourcesCited = (metadata?.sources_cited as unknown[]) || [];
+      
+      // Check if content has citations and we have chunk data
+      const hasCitations = /(?:Chunk \d+|Chunk #\d+|Citation \d+|Source \d+|\[\d+\])/i.test(content) && 
+                          (chunksRetrieved.length > 0 || sourcesCited.length > 0);
+      
+      if (hasCitations && onCitationClick) {
+        // Transform database chunks to citation format
+        const citations = transformChunksToCitations(chunksRetrieved, sourcesCited);
+        
+        // Parse content into segments with citation references
+        const segments = parseContentToSegments(content, citations);
+        
+        // Create enhanced content structure
+        const enhancedContent: EnhancedContent = {
+          segments,
+          citations
+        };
+        
+        return (
+          <EnhancedMarkdownRenderer 
+            content={enhancedContent}
+            onCitationClick={onCitationClick}
+            className="citation-content"
+          />
+        );
+      }
+      
       // Check if content looks like markdown
       const hasMarkdown = /^#\s|^##\s|^###\s|^\*\*.*\*\*|^\*.*\*|^- |^\d+\.|^```/.test(content);
       
       if (hasMarkdown) {
-        return <MarkdownRenderer content={content} />;
+        return <EnhancedMarkdownRenderer content={content} onCitationClick={onCitationClick} />;
       }
 
-      // Process citation chips like [1], [2], etc.
+      // Fallback: Process simple citation chips like [1], [2], etc. (for backward compatibility)
       const citationRegex = /\[(\d+)\]/g;
       const parts = content.split(citationRegex);
       
-      return (
-        <>
-          {parts.map((part, index) => {
-            if (index % 2 === 1) {
-              // This is a citation number
-              const citationId = part;
-              return (
-                <Popover key={index}>
-                  <PopoverTrigger asChild>
-                    <Badge 
-                      variant="secondary" 
-                      className="cursor-pointer mx-1 hover:bg-secondary/80"
-                      data-testid="citation-chip"
-                    >
-                      [{citationId}]
-                    </Badge>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80" data-testid="citation-popover">
-                    <div className="text-sm">
-                      <p className="font-medium">Citation {citationId}</p>
-                      <p className="text-muted-foreground mt-1">
-                        Loading citation details...
-                      </p>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              );
-            }
-            return <span key={index}>{part}</span>;
-          })}
-        </>
-      );
+      if (parts.length > 1) {
+        return (
+          <>
+            {parts.map((part, index) => {
+              if (index % 2 === 1) {
+                // This is a citation number
+                const citationId = part;
+                return (
+                  <Popover key={index}>
+                    <PopoverTrigger asChild>
+                      <Badge 
+                        variant="secondary" 
+                        className="cursor-pointer mx-1 hover:bg-secondary/80"
+                        data-testid="citation-chip"
+                      >
+                        [{citationId}]
+                      </Badge>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80" data-testid="citation-popover">
+                      <div className="text-sm">
+                        <p className="font-medium">Citation {citationId}</p>
+                        <p className="text-muted-foreground mt-1">
+                          Loading citation details...
+                        </p>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                );
+              }
+              return <span key={index}>{part}</span>;
+            })}
+          </>
+        );
+      }
+      
+      // Return plain content if no citations or markdown detected
+      return <span>{content}</span>;
     }
 
     // Handle object content (JSON responses from n8n)
@@ -503,7 +540,7 @@ const renderMessageContentInternal = (content: unknown, metadata?: Record<string
               <div key={index} className="flex items-start gap-2">
                 <span className="text-xs text-muted-foreground mt-1">•</span>
                 <div className="flex-1">
-                  {renderMessageContentInternal(item)}
+                  {renderMessageContentInternal(item, metadata, onCitationClick)}
                 </div>
               </div>
             ))}
@@ -533,9 +570,9 @@ const renderMessageContentInternal = (content: unknown, metadata?: Record<string
         console.log('📊 Content length:', reportContent?.length || 0);
         console.log('📊 Object sample content preview:', reportContent ? reportContent.substring(0, 200) + '...' : 'No content');
         
-        // If we have direct content, use EnhancedReportViewer
+        // If we have direct content, use ChatReportViewer with citation support
         if (reportContent && reportContent.trim()) {
-          console.log('✅ Using EnhancedReportViewer with direct object content');
+          console.log('✅ Using ChatReportViewer with direct object content');
           return (
             <ChatReportViewer
               title={(obj.topic || obj.title || 'Planning Report') as string}
@@ -546,6 +583,8 @@ const renderMessageContentInternal = (content: unknown, metadata?: Record<string
                 created_at: new Date().toISOString(),
                 sections: obj.sections,
                 reportId: (obj.id || obj.report_id) as string,
+                chunks_retrieved: metadata?.chunks_retrieved,
+                sources_cited: metadata?.sources_cited,
                 ...obj.metadata as Record<string, unknown>
               }}
               onDownload={() => {
@@ -626,7 +665,7 @@ const renderMessageContentInternal = (content: unknown, metadata?: Record<string
       
       // Check for common response patterns from n8n
       if ('content' in obj && typeof obj.content === 'string') {
-        return renderMessageContentInternal(obj.content);
+        return renderMessageContentInternal(obj.content, metadata, onCitationClick);
       }
       
       if ('message' in obj && typeof obj.message === 'string') {
@@ -646,11 +685,11 @@ const renderMessageContentInternal = (content: unknown, metadata?: Record<string
             </div>
           );
         }
-        return renderMessageContentInternal(obj.message);
+        return renderMessageContentInternal(obj.message, metadata, onCitationClick);
       }
       
       if ('response' in obj && typeof obj.response === 'string') {
-        return renderMessageContentInternal(obj.response);
+        return renderMessageContentInternal(obj.response, metadata, onCitationClick);
       }
 
       // Render as formatted JSON for debugging
@@ -697,7 +736,7 @@ const renderMessageContentInternal = (content: unknown, metadata?: Record<string
   }
 };
 
-export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamProps) => {
+export const ChatStream = ({ sessionId, notebookId, onNewSession, onCitationClick }: ChatStreamProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [citationData, setCitationData] = useState<Record<string, CitationData>>({});
@@ -777,7 +816,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
           const formattedMessages: Message[] = chatMessages.map((msg: DatabaseMessage) => ({
             id: msg.id,
             type: msg.role as 'user' | 'assistant',
-            content: msg.content,
+            content: msg.message,
             timestamp: msg.created_at || new Date().toISOString(),
             metadata: msg.retrieval_metadata as Record<string, unknown> | undefined
           }));
@@ -833,7 +872,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
           console.log('📋 New message details:', {
             id: newMessage.id,
             role: newMessage.role,
-            content: newMessage.content?.substring(0, 100) + '...',
+            content: newMessage.message?.substring(0, 100) + '...',
             created_at: newMessage.created_at
           });
           
@@ -844,7 +883,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
               if (msg.id === newMessage.id) return true;
               
               // Check by content and timestamp (secondary, for edge cases)
-              if (msg.content === newMessage.content && 
+              if (msg.content === newMessage.message && 
                   msg.type === newMessage.role &&
                   Math.abs(new Date(msg.timestamp || 0).getTime() - new Date(newMessage.created_at).getTime()) < 5000) {
                 console.log('⚠️ Duplicate detected by content/timestamp, skipping:', newMessage.id);
@@ -865,7 +904,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
             const newMsg: Message = {
               id: newMessage.id,
               type: newMessage.role as 'user' | 'assistant',
-              content: newMessage.content,
+              content: newMessage.message,
               timestamp: newMessage.created_at || new Date().toISOString(),
               metadata: newMessage.retrieval_metadata as Record<string, unknown> | undefined
             };
@@ -1204,7 +1243,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
         const formattedMessages: Message[] = chatMessages.map((msg: DatabaseMessage) => ({
           id: msg.id,
           type: msg.role as 'user' | 'assistant',
-          content: msg.content,
+          content: msg.message,
           timestamp: msg.created_at || new Date().toISOString(),
           metadata: msg.retrieval_metadata as Record<string, unknown> | undefined
         }));
@@ -1502,7 +1541,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
 
 
   // Chat History Search Functions
-  const searchChatHistory = async (query: string) => {
+  const searchChatHistory = useCallback(async (query: string) => {
     if (!query.trim()) {
       setSearchResults([]);
       return;
@@ -1524,7 +1563,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
           )
         `)
         .eq('chat_sessions.user_id', user?.id)
-        .ilike('content', `%${query}%`)
+        .ilike('message', `%${query}%`)
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -1565,7 +1604,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
 
       // Process and rank results
       const results: SearchResult[] = (chatMessages || []).map((msg: DatabaseMessage & { chat_sessions?: { id: string; title?: string; user_id: string } }) => {
-        const content = msg.content?.toLowerCase() || '';
+        const content = msg.message?.toLowerCase() || '';
         const queryLower = query.toLowerCase();
         
         // Calculate relevance score
@@ -1595,7 +1634,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
           message: {
             id: msg.id,
             type: msg.role as 'user' | 'assistant',
-            content: msg.content,
+            content: msg.message,
             timestamp: msg.created_at,
             metadata: msg.retrieval_metadata as Record<string, unknown> | undefined
           },
@@ -1627,7 +1666,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
     } finally {
       setIsSearching(false);
     }
-  };
+  }, [user?.id, sessionId, searchFilters]);
 
   // Debounced search
   useEffect(() => {
@@ -1640,7 +1679,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, searchFilters]);
+  }, [searchQuery, searchFilters, searchChatHistory]);
 
   // Highlight search terms in text
   const highlightSearchTerms = (text: string, query: string) => {
@@ -1881,7 +1920,7 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession }: ChatStreamPr
                     {message.content === "thinking" && message.type === 'assistant' ? (
                       <ThinkingAnimation />
                     ) : (
-                      renderMessageContent(message)
+                      renderMessageContent(message, onCitationClick)
                     )}
                   </div>
                   
