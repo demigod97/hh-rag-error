@@ -202,6 +202,27 @@ All colors MUST be HSL.
     @apply my-6 border-gray-300;
   }
 
+  /* Table styling for prose content */
+  .prose table {
+    @apply w-full border-collapse border border-border my-6;
+  }
+  
+  .prose thead {
+    @apply bg-muted/50;
+  }
+  
+  .prose th {
+    @apply border border-border px-4 py-2 text-left font-semibold;
+  }
+  
+  .prose td {
+    @apply border border-border px-4 py-2;
+  }
+  
+  .prose tr:hover {
+    @apply bg-muted/30;
+  }
+
   /* Document content styling for Word-like appearance */
   .document-content {
     font-family: 'Georgia', 'Times New Roman', serif;

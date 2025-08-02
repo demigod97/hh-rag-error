@@ -476,8 +476,8 @@ const renderMessageContentInternal = (content: unknown, metadata?: Record<string
         );
       }
       
-      // Check if content looks like markdown
-      const hasMarkdown = /^#\s|^##\s|^###\s|^\*\*.*\*\*|^\*.*\*|^- |^\d+\.|^```/.test(content);
+      // Check if content looks like markdown - improved detection including tables
+      const hasMarkdown = /^#\s|^##\s|^###\s|^\*\*.*\*\*|^\*.*\*|^- |^\d+\.|^```|\|.*\||(?:\n|^)(?:-|\*|\+)\s|\n\s*\|\s*.*\s*\|/.test(content);
       
       if (hasMarkdown) {
         return <EnhancedMarkdownRenderer content={content} onCitationClick={onCitationClick} />;
