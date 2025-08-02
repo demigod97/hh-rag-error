@@ -877,44 +877,67 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession, onCitationClic
           });
           
           setMessages(prev => {
-            // More robust duplicate checking
-            const exists = prev.some(msg => {
-              // Check by ID (primary)
-              if (msg.id === newMessage.id) return true;
-              
-              // Check by content and timestamp (secondary, for edge cases)
-              if (msg.content === newMessage.message && 
-                  msg.type === newMessage.role &&
-                  Math.abs(new Date(msg.timestamp || 0).getTime() - new Date(newMessage.created_at).getTime()) < 5000) {
-                console.log('⚠️ Duplicate detected by content/timestamp, skipping:', newMessage.id);
-                return true;
-              }
-              
-              return false;
-            });
-            
-            if (exists) {
-              console.log('⏭️ Message already exists, skipping:', newMessage.id);
+            // Check if this is a duplicate by database ID
+            const existsByDbId = prev.some(msg => msg.id === newMessage.id);
+            if (existsByDbId) {
+              console.log('⏭️ Message with DB ID already exists, skipping:', newMessage.id);
               return prev;
             }
             
-            console.log('✅ Adding new message from real-time:', newMessage.id);
-            
-            // Create new message with correct field mapping
+            // Create new message from database
             const newMsg: Message = {
               id: newMessage.id,
               type: newMessage.role as 'user' | 'assistant',
               content: newMessage.message,
               timestamp: newMessage.created_at || new Date().toISOString(),
-              metadata: newMessage.retrieval_metadata as Record<string, unknown> | undefined
+              metadata: newMessage.retrieval_metadata as Record<string, unknown> | undefined,
+              status: 'read' // Messages from DB are considered read
             };
             
-            // Sort messages by timestamp to ensure correct order
-            const updatedMessages = [...prev, newMsg].sort((a, b) => {
+            // Check if this should replace a temporary message (same content, similar timestamp)
+            const tempMessageIndex = prev.findIndex(msg => 
+              msg.id.startsWith('user-') && 
+              msg.content === newMessage.message &&
+              msg.type === newMessage.role &&
+              Math.abs(new Date(msg.timestamp || 0).getTime() - new Date(newMessage.created_at).getTime()) < 10000
+            );
+            
+            if (tempMessageIndex !== -1) {
+              console.log('🔄 Replacing temporary message with database message:', newMessage.id);
+              const updated = [...prev];
+              updated[tempMessageIndex] = newMsg;
+              return updated;
+            }
+            
+            // Check for content duplicates (broader check)
+            const contentDuplicate = prev.some(msg => 
+              msg.content === newMessage.message && 
+              msg.type === newMessage.role &&
+              Math.abs(new Date(msg.timestamp || 0).getTime() - new Date(newMessage.created_at).getTime()) < 5000
+            );
+            
+            if (contentDuplicate) {
+              console.log('⚠️ Content duplicate detected, skipping:', newMessage.id);
+              return prev;
+            }
+            
+            console.log('✅ Adding new message from real-time:', newMessage.id);
+            
+            // Remove thinking indicator when we get an assistant response
+            const withoutThinking = newMessage.role === 'assistant' 
+              ? prev.filter(msg => msg.content !== "thinking")
+              : prev;
+            
+            // Add new message and sort by timestamp
+            const updatedMessages = [...withoutThinking, newMsg].sort((a, b) => {
               const timeA = new Date(a.timestamp || 0).getTime();
               const timeB = new Date(b.timestamp || 0).getTime();
               return timeA - timeB;
             });
+            
+            if (newMessage.role === 'assistant') {
+              console.log('🗑️ Removed thinking indicator - AI response received');
+            }
             
             return updatedMessages;
           });
@@ -1156,8 +1179,16 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession, onCitationClic
         'Attached files:\n' + fileReferences;
     }
     
-    // Don't add user message locally - let real-time subscription handle it
-    // This prevents duplicate messages
+    // Add user message immediately with proper status tracking
+    const tempUserMessage: Message = {
+      id: `user-${Date.now()}`,
+      type: "user",
+      content: fullMessageContent,
+      timestamp: new Date().toISOString(),
+      status: 'sending'
+    };
+    
+    setMessages(m => [...m, tempUserMessage]);
     setIsLoading(true);
     setInputValue('');
     setAttachedFiles([]); // Clear attached files after sending
@@ -1182,34 +1213,31 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession, onCitationClic
       
       console.log('Chat response received:', res);
       
-      // Remove thinking message immediately
+      // Update temp user message status to delivered, but KEEP thinking indicator until AI response arrives
       setMessages(m => {
-        const filtered = m.filter(msg => msg.content !== "thinking");
-        console.log('🗑️ Removed thinking indicator');
-        return filtered;
+        return m.map(msg => 
+          msg.id === tempUserMessage.id 
+            ? { ...msg, status: 'delivered' as const }
+            : msg
+        );
+        // Note: NOT removing thinking indicator here - let realtime subscription handle it
       });
       
-      // Handle the AI response - don't add it locally, let real-time subscription handle it
-      // The real-time subscription will automatically add the assistant message from the database
-      console.log('✅ Chat message sent successfully, waiting for real-time response');
+      console.log('✅ Chat message sent successfully, keeping thinking indicator until AI response');
       
     } catch (error) {
       console.error('Chat error:', error);
       setChatError(error.message || 'Failed to send message');
       
       setMessages(m => {
-        const withoutThinking = m.filter(msg => msg.content !== "thinking");
-        console.log('🗑️ Removed thinking indicator due to error');
-        return [
-          ...withoutThinking,
-          {
-            id: `error-${Date.now()}`,
-            type: "assistant",
-            content: "Sorry, I encountered an error processing your message. Please try again.",
-            timestamp: new Date().toISOString()
-          }
-        ];
+        return m.map(msg => 
+          msg.id === tempUserMessage.id 
+            ? { ...msg, status: 'failed' as const }
+            : msg
+        ).filter(msg => msg.content !== "thinking"); // Remove thinking indicator on error
       });
+      
+      console.log('🗑️ Removed thinking indicator due to error');
     } finally {
       setIsLoading(false);
     }
@@ -1248,19 +1276,44 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession, onCitationClic
           metadata: msg.retrieval_metadata as Record<string, unknown> | undefined
         }));
 
-        // Complete refresh approach - replace all non-welcome messages with database data
+        // Smart refresh approach - preserve welcome message and temporary messages, update from database
         setMessages(prev => {
           const welcomeMessage = prev[0];
           
+          // Keep temporary messages that are still being processed (sending/delivered status)
+          const tempMessages = prev.filter(msg => 
+            msg.id.startsWith('user-') && 
+            (msg.status === 'sending' || msg.status === 'delivered')
+          );
+          
           // Sort database messages by timestamp
-          const sortedMessages = formattedMessages.sort((a, b) => {
+          const sortedDbMessages = formattedMessages.sort((a, b) => {
             const timeA = new Date(a.timestamp || 0).getTime();
             const timeB = new Date(b.timestamp || 0).getTime();
             return timeA - timeB;
           });
           
-          console.log('✅ Manual refresh complete - refreshed', sortedMessages.length, 'messages');
-          return [welcomeMessage, ...sortedMessages];
+          // Combine and deduplicate - database messages take precedence
+          const combined = [...tempMessages, ...sortedDbMessages];
+          const deduplicated = combined.filter((msg, index, arr) => {
+            // Keep if it's the first occurrence by content and timestamp
+            const firstIndex = arr.findIndex(m => 
+              m.content === msg.content && 
+              m.type === msg.type &&
+              Math.abs(new Date(m.timestamp || 0).getTime() - new Date(msg.timestamp || 0).getTime()) < 5000
+            );
+            return firstIndex === index;
+          });
+          
+          // Final sort by timestamp
+          const finalMessages = deduplicated.sort((a, b) => {
+            const timeA = new Date(a.timestamp || 0).getTime();
+            const timeB = new Date(b.timestamp || 0).getTime();
+            return timeA - timeB;
+          });
+          
+          console.log('✅ Manual refresh complete - refreshed', finalMessages.length, 'messages');
+          return [welcomeMessage, ...finalMessages];
         });
       } else {
         // No messages in database, just keep welcome message
@@ -1313,32 +1366,24 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession, onCitationClic
     }, [thinkingEmojis.length]);
 
     return (
-      <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-        <div className="flex items-center gap-2">
-          {/* Animated emoji */}
-          <div className="text-2xl animate-pulse">
-            {thinkingEmojis[currentEmoji]}
-          </div>
-          
-          {/* Animated dots */}
-          <div className="flex space-x-1">
-            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
-            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
-          </div>
-
-          {/* Backup Lottie animation if available */}
-          {thinkingAnimation && (
-            <Lottie 
-              animationData={thinkingAnimation} 
-              loop={true}
-              style={{ width: 40, height: 20 }}
-            />
-          )}
+      <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-muted/30 to-muted/50 rounded-lg border border-muted-foreground/10">
+        {/* Animated emoji */}
+        <div className="text-xl animate-pulse">
+          {thinkingEmojis[currentEmoji]}
         </div>
-        <div>
-          <p className="font-medium text-foreground">Town Planner Assistant is thinking...</p>
-          <p className="text-sm text-muted-foreground">Analyzing your documents and generating a response</p>
+        
+        {/* Animated dots */}
+        <div className="flex space-x-1">
+          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" />
+          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+          <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+        </div>
+
+        {/* Gradient animated text */}
+        <div className="relative">
+          <span className="text-sm font-medium bg-gradient-to-r from-primary via-blue-500 to-purple-500 bg-clip-text text-transparent bg-300% animate-gradient">
+            Loading response...
+          </span>
         </div>
       </div>
     );
@@ -1412,12 +1457,8 @@ export const ChatStream = ({ sessionId, notebookId, onNewSession, onCitationClic
       // Update status to read when regeneration is complete
       updateMessageStatus(userMessage.id, 'read');
       
-      // Remove thinking message
-      setMessages(m => {
-        const filtered = m.filter(msg => msg.content !== "thinking");
-        console.log('🗑️ Removed thinking indicator after regeneration');
-        return filtered;
-      });
+      // Don't remove thinking indicator here - let realtime subscription handle it
+      console.log('✅ Regeneration request sent, keeping thinking indicator until AI response');
       
       toast({
         title: "Message regenerated",
