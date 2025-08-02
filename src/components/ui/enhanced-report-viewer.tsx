@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +33,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { cn } from '@/lib/utils';
 
 // Advanced Report Content Parser and Renderer
 interface ParsedSection {
@@ -172,95 +175,186 @@ const FigureReference: React.FC<{ figure: FigureReference }> = ({ figure }) => (
   </Popover>
 );
 
-// Enhanced Text Renderer
+// Enhanced Markdown Text Renderer
 const TextRenderer: React.FC<{ content: string, figures: FigureReference[] }> = ({ content, figures }) => {
-  // Replace figure references with components
-  const processText = (text: string) => {
-    const figureRegex = /\[{"pageContent":"([^"]+)","metadata":({[^}]*})}\]/g;
-    const parts = text.split(figureRegex);
-    
-    return parts.map((part, index) => {
-      if (index % 3 === 0) {
-        // Regular text
-        return (
-          <span key={index} className="leading-relaxed">
-            {part}
-          </span>
-        );
-      } else if (index % 3 === 1) {
-        // Figure title - find matching figure
-        const figure = figures.find(f => f.title === part);
-        if (figure) {
-          return <FigureReference key={index} figure={figure} />;
-        }
-        return null;
-      }
-      return null; // Skip metadata parts
-    });
-  };
+  // First, replace figure references with placeholders that we can process later
+  const processedContent = content.replace(
+    /\[{"pageContent":"([^"]+)","metadata":({[^}]*})}\]/g,
+    (match, title, metadata) => {
+      const figure = figures.find(f => f.title === title);
+      return figure ? `[FIGURE:${figure.id}]` : match;
+    }
+  );
 
-  // Process bullet points and formatting
-  const formatContent = (text: string) => {
-    const lines = text.split('\n');
-    const elements: JSX.Element[] = [];
-    let listItems: string[] = [];
-    let inList = false;
-
-    const flushList = () => {
-      if (listItems.length > 0) {
-        elements.push(
-          <ul key={`list-${elements.length}`} className="list-disc list-inside space-y-2 my-4 ml-4">
-            {listItems.map((item, idx) => (
-              <li key={idx} className="text-sm leading-relaxed text-foreground/90">
-                {processText(item)}
-              </li>
-            ))}
-          </ul>
-        );
-        listItems = [];
-        inList = false;
-      }
-    };
-
-    lines.forEach((line, index) => {
-      const trimmedLine = line.trim();
-      
-      if (trimmedLine.startsWith('- ')) {
-        if (!inList) inList = true;
-        listItems.push(trimmedLine.substring(2));
-      } else if (trimmedLine.startsWith('* ')) {
-        if (!inList) inList = true;
-        listItems.push(trimmedLine.substring(2));
-      } else if (/^\d+\.\s/.test(trimmedLine)) {
-        if (!inList) inList = true;
-        listItems.push(trimmedLine.replace(/^\d+\.\s/, ''));
-      } else if (trimmedLine === '') {
-        flushList();
-        // Add spacing
-      } else if (trimmedLine) {
-        flushList();
-        elements.push(
-          <p key={index} className="text-sm leading-relaxed text-foreground/90 my-3">
-            {processText(trimmedLine)}
-          </p>
-        );
-      }
-    });
-
-    flushList();
-    return elements;
-  };
-
-  return <div className="space-y-2">{formatContent(content)}</div>;
+  return (
+    <div className={cn('prose prose-sm max-w-none dark:prose-invert')}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          // Custom table styling with shadcn/ui classes
+          table: ({ children, ...props }) => (
+            <div className="my-6 w-full overflow-y-auto">
+              <table className="w-full border-collapse border border-border" {...props}>
+                {children}
+              </table>
+            </div>
+          ),
+          thead: ({ children, ...props }) => (
+            <thead className="bg-muted/50" {...props}>
+              {children}
+            </thead>
+          ),
+          tbody: ({ children, ...props }) => (
+            <tbody {...props}>
+              {children}
+            </tbody>
+          ),
+          tr: ({ children, ...props }) => (
+            <tr className="border-b border-border hover:bg-muted/30" {...props}>
+              {children}
+            </tr>
+          ),
+          th: ({ children, ...props }) => (
+            <th className="border border-border px-4 py-2 text-left font-semibold" {...props}>
+              {children}
+            </th>
+          ),
+          td: ({ children, ...props }) => (
+            <td className="border border-border px-4 py-2" {...props}>
+              {children}
+            </td>
+          ),
+          // Custom heading styling - these will be used by the section components
+          h1: ({ children, ...props }) => (
+            <h1 className="scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl mb-4" {...props}>
+              {children}
+            </h1>
+          ),
+          h2: ({ children, ...props }) => (
+            <h2 className="scroll-m-20 border-b pb-2 text-3xl font-semibold tracking-tight first:mt-0 mb-4" {...props}>
+              {children}
+            </h2>
+          ),
+          h3: ({ children, ...props }) => (
+            <h3 className="scroll-m-20 text-2xl font-semibold tracking-tight mb-3" {...props}>
+              {children}
+            </h3>
+          ),
+          h4: ({ children, ...props }) => (
+            <h4 className="scroll-m-20 text-xl font-semibold tracking-tight mb-2" {...props}>
+              {children}
+            </h4>
+          ),
+          h5: ({ children, ...props }) => (
+            <h5 className="scroll-m-20 text-lg font-semibold tracking-tight mb-2" {...props}>
+              {children}
+            </h5>
+          ),
+          h6: ({ children, ...props }) => (
+            <h6 className="scroll-m-20 text-base font-semibold tracking-tight mb-2" {...props}>
+              {children}
+            </h6>
+          ),
+          // Custom list styling
+          ul: ({ children, ...props }) => (
+            <ul className="my-6 ml-6 list-disc [&>li]:mt-2" {...props}>
+              {children}
+            </ul>
+          ),
+          ol: ({ children, ...props }) => (
+            <ol className="my-6 ml-6 list-decimal [&>li]:mt-2" {...props}>
+              {children}
+            </ol>
+          ),
+          li: ({ children, ...props }) => (
+            <li className="leading-7" {...props}>
+              {children}
+            </li>
+          ),
+          // Custom paragraph styling with figure reference handling
+          p: ({ children, ...props }) => {
+            // Check if this paragraph contains figure references
+            const childrenString = React.Children.toArray(children).join('');
+            if (typeof childrenString === 'string' && childrenString.includes('[FIGURE:')) {
+              // Process figure references
+              const parts = childrenString.split(/(\[FIGURE:[^\]]+\])/g);
+              const processedChildren = parts.map((part, index) => {
+                const figureMatch = part.match(/\[FIGURE:([^\]]+)\]/);
+                if (figureMatch) {
+                  const figure = figures.find(f => f.id === figureMatch[1]);
+                  return figure ? <FigureReference key={index} figure={figure} /> : part;
+                }
+                return <span key={index}>{part}</span>;
+              });
+              
+              return (
+                <p className="leading-7 [&:not(:first-child)]:mt-6" {...props}>
+                  {processedChildren}
+                </p>
+              );
+            }
+            
+            return (
+              <p className="leading-7 [&:not(:first-child)]:mt-6" {...props}>
+                {children}
+              </p>
+            );
+          },
+          // Custom blockquote styling
+          blockquote: ({ children, ...props }) => (
+            <blockquote className="mt-6 border-l-2 pl-6 italic" {...props}>
+              {children}
+            </blockquote>
+          ),
+          // Custom code styling
+          code: ({ children, className, ...props }) => {
+            const isInline = !className || !className.includes('language-');
+            if (isInline) {
+              return (
+                <code className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold" {...props}>
+                  {children}
+                </code>
+              );
+            }
+            return (
+              <code className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold" {...props}>
+                {children}
+              </code>
+            );
+          },
+          pre: ({ children, ...props }) => (
+            <pre className="mb-4 mt-6 overflow-x-auto rounded-lg border bg-muted p-4" {...props}>
+              {children}
+            </pre>
+          ),
+          // Custom strong/bold styling
+          strong: ({ children, ...props }) => (
+            <strong className="font-semibold" {...props}>
+              {children}
+            </strong>
+          ),
+          // Custom emphasis/italic styling
+          em: ({ children, ...props }) => (
+            <em className="italic" {...props}>
+              {children}
+            </em>
+          ),
+        }}
+      >
+        {processedContent}
+      </ReactMarkdown>
+    </div>
+  );
 };
 
-// Section Component
+// Section Component with proper scroll anchoring
 const SectionComponent: React.FC<{ 
   section: ParsedSection, 
   figures: FigureReference[], 
   activeSection: string,
-  onSectionClick: (id: string) => void 
-}> = ({ section, figures, activeSection, onSectionClick }) => {
+  onSectionClick: (id: string) => void,
+  scrollAreaRef?: React.RefObject<HTMLDivElement>
+}> = ({ section, figures, activeSection, onSectionClick, scrollAreaRef }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const isActive = activeSection === section.id;
 
@@ -278,8 +372,9 @@ const SectionComponent: React.FC<{
     return (
       <Component 
         id={id}
-        className={`${baseClasses} ${sizeClasses[level as keyof typeof sizeClasses]} ${isActive ? 'text-primary' : ''}`}
+        className={`${baseClasses} ${sizeClasses[level as keyof typeof sizeClasses]} ${isActive ? 'text-primary bg-primary/5 px-2 py-1 rounded' : ''}`}
         onClick={() => onSectionClick(id)}
+        data-section-id={id} // Add data attribute for scroll tracking
       >
         <Hash className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" />
         {children}
@@ -288,30 +383,28 @@ const SectionComponent: React.FC<{
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-section={section.id}>
       <HeadingComponent level={section.level} id={section.id}>
         {section.title}
       </HeadingComponent>
       
       {section.content.trim() && (
-        <Card className="border-l-4 border-l-blue-500 bg-blue-50/30">
-          <CardContent className="pt-4">
-            <TextRenderer content={section.content} figures={figures} />
-          </CardContent>
-        </Card>
+        <div className="border-l-4 border-l-primary/30 pl-6 py-4 bg-muted/20 rounded-r-md">
+          <TextRenderer content={section.content} figures={figures} />
+        </div>
       )}
 
       {section.children.length > 0 && (
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="mb-2">
+            <Button variant="ghost" size="sm" className="mb-2 text-muted-foreground hover:text-foreground">
               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               <span className="ml-2">
                 {section.children.length} subsection{section.children.length !== 1 ? 's' : ''}
               </span>
             </Button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-4 ml-4">
+          <CollapsibleContent className="space-y-4 ml-4 border-l border-muted pl-4">
             {section.children.map((child) => (
               <SectionComponent
                 key={child.id}
@@ -319,6 +412,7 @@ const SectionComponent: React.FC<{
                 figures={figures}
                 activeSection={activeSection}
                 onSectionClick={onSectionClick}
+                scrollAreaRef={scrollAreaRef}
               />
             ))}
           </CollapsibleContent>
@@ -329,39 +423,53 @@ const SectionComponent: React.FC<{
 };
 
 // Enhanced Content Renderer using shadcn/ui components
-const ContentRenderer: React.FC<{ content: string }> = ({ content }) => {
+const ContentRenderer: React.FC<{ 
+  content: string, 
+  scrollAreaRef?: React.RefObject<HTMLDivElement>,
+  onActiveSection?: (sectionId: string) => void 
+}> = ({ content, scrollAreaRef, onActiveSection }) => {
   const [activeSection, setActiveSection] = useState<string>('');
   
   const { sections, figures } = parseReportContent(content);
 
   const handleSectionClick = (sectionId: string) => {
     setActiveSection(sectionId);
+    onActiveSection?.(sectionId);
     
-    // Scroll to section with proper offset
+    // Scroll to section within the scroll area
     setTimeout(() => {
       const element = document.getElementById(sectionId);
-      if (element) {
-        const headerOffset = 120; // Account for fixed header
-        const elementPosition = element.getBoundingClientRect().top;
-        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      if (element && scrollAreaRef?.current) {
+        const scrollArea = scrollAreaRef.current;
+        const elementTop = element.offsetTop;
+        const offset = 120; // Account for header
         
-        window.scrollTo({
-          top: offsetPosition,
+        scrollArea.scrollTo({
+          top: elementTop - offset,
           behavior: 'smooth'
         });
+        
+        // Add visual feedback
+        element.style.backgroundColor = 'rgba(var(--primary), 0.1)';
+        setTimeout(() => {
+          element.style.backgroundColor = '';
+        }, 2000);
       }
     }, 100);
   };
 
-  // Track active section on scroll
+  // Track active section on scroll within the scroll area
   useEffect(() => {
     const handleScroll = () => {
-      const scrollPosition = window.scrollY + 150; // Offset for better UX
+      if (!scrollAreaRef?.current) return;
       
-      // Find all section elements
+      const scrollTop = scrollAreaRef.current.scrollTop;
+      const scrollPosition = scrollTop + 150; // Offset for better UX
+      
+      // Find all section elements within the scroll area
       const sectionElements = sections.map(section => ({
         id: section.id,
-        element: document.getElementById(section.id)
+        element: scrollAreaRef.current?.querySelector(`#${section.id}`) as HTMLElement
       })).filter(item => item.element);
 
       // Find the currently visible section
@@ -376,14 +484,18 @@ const ContentRenderer: React.FC<{ content: string }> = ({ content }) => {
       
       if (currentSection !== activeSection) {
         setActiveSection(currentSection);
+        onActiveSection?.(currentSection);
       }
     };
 
-    window.addEventListener('scroll', handleScroll);
-    handleScroll(); // Set initial active section
-    
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [sections, activeSection]);
+    const scrollElement = scrollAreaRef?.current;
+    if (scrollElement) {
+      scrollElement.addEventListener('scroll', handleScroll);
+      handleScroll(); // Set initial active section
+      
+      return () => scrollElement.removeEventListener('scroll', handleScroll);
+    }
+  }, [sections, activeSection, scrollAreaRef, onActiveSection]);
 
   if (sections.length === 0) {
     return (
@@ -399,7 +511,7 @@ const ContentRenderer: React.FC<{ content: string }> = ({ content }) => {
   return (
     <div className="space-y-6">
       {figures.length > 0 && (
-        <Card className="bg-green-50/50 border-green-200">
+        <Card className="bg-green-50/50 border-green-200 dark:bg-green-950/50 dark:border-green-800">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <ImageIcon className="h-4 w-4" />
@@ -424,6 +536,7 @@ const ContentRenderer: React.FC<{ content: string }> = ({ content }) => {
             figures={figures}
             activeSection={activeSection}
             onSectionClick={handleSectionClick}
+            scrollAreaRef={scrollAreaRef}
           />
         ))}
       </div>
@@ -495,32 +608,12 @@ export const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
 
   const sections = flattenSections(parsedSections);
 
-  // Handle scroll for scroll-to-top button and active section tracking
+  // Handle scroll for scroll-to-top button only (active section tracking is now handled in ContentRenderer)
   useEffect(() => {
     const handleScroll = () => {
       if (!scrollAreaRef.current) return;
       const scrollTop = scrollAreaRef.current.scrollTop;
       setShowScrollTop(scrollTop > 300);
-      
-      // Track active section within scroll area
-      const scrollPosition = scrollTop + 150;
-      const sectionElements = sections.map(section => ({
-        id: section.id,
-        element: scrollAreaRef.current?.querySelector(`#${section.id}`) as HTMLElement
-      })).filter(item => item.element);
-
-      let currentSection = '';
-      for (let i = sectionElements.length - 1; i >= 0; i--) {
-        const element = sectionElements[i].element;
-        if (element && element.offsetTop <= scrollPosition) {
-          currentSection = sectionElements[i].id;
-          break;
-        }
-      }
-      
-      if (currentSection !== activeSection) {
-        setActiveSection(currentSection);
-      }
     };
 
     const scrollElement = scrollAreaRef.current;
@@ -528,11 +621,14 @@ export const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
       scrollElement.addEventListener('scroll', handleScroll);
       return () => scrollElement.removeEventListener('scroll', handleScroll);
     }
-  }, [sections, activeSection]);
+  }, []);
 
   const scrollToSection = (sectionId: string) => {
-    const element = document.getElementById(sectionId);
-    if (element && scrollAreaRef.current) {
+    if (!scrollAreaRef.current) return;
+    
+    // Find the element within the scroll area
+    const element = scrollAreaRef.current.querySelector(`#${sectionId}`) as HTMLElement;
+    if (element) {
       const scrollArea = scrollAreaRef.current;
       const elementTop = element.offsetTop;
       const offset = 100;
@@ -546,7 +642,7 @@ export const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
       setActiveSection(sectionId);
       
       // Add visual feedback
-      element.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+      element.style.backgroundColor = 'rgba(var(--primary), 0.1)';
       setTimeout(() => {
         element.style.backgroundColor = '';
       }, 2000);
@@ -592,21 +688,37 @@ export const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
         {filteredSections.map((section) => (
           <button
             key={section.id}
-            onClick={() => scrollToSection(section.id)}
-            className={`w-full text-left p-2 rounded-md text-sm transition-all hover:bg-muted/50 border-l-2 ${
+            onClick={() => {
+              scrollToSection(section.id);
+              // Close mobile sheet if it's open
+              if (inSheet) {
+                // The sheet will close automatically due to the click outside behavior
+                // but we can force it by triggering a state change if needed
+              }
+            }}
+            className={`w-full text-left p-2 rounded-md text-sm transition-all hover:bg-muted/50 border-l-2 group ${
               activeSection === section.id 
-                ? 'bg-primary/10 border-l-primary text-primary font-medium' 
-                : 'border-l-transparent text-muted-foreground hover:text-foreground hover:border-l-muted'
+                ? 'bg-primary/10 border-l-primary text-primary font-medium shadow-sm' 
+                : 'border-l-transparent text-muted-foreground hover:text-foreground hover:border-l-muted hover:bg-accent'
             }`}
             style={{ paddingLeft: `${(section.level - 1) * 16 + 8}px` }}
           >
-            <span className="block truncate">{section.title}</span>
+            <div className="flex items-center gap-2">
+              <div className={`w-1 h-1 rounded-full transition-colors ${
+                activeSection === section.id ? 'bg-primary' : 'bg-muted-foreground/40 group-hover:bg-foreground'
+              }`} />
+              <span className="block truncate font-medium">{section.title}</span>
+            </div>
+            {activeSection === section.id && (
+              <div className="text-xs text-primary/70 mt-1">Currently viewing</div>
+            )}
           </button>
         ))}
       </div>
       
       {filteredSections.length === 0 && searchTerm && (
         <div className="text-center py-4 text-muted-foreground text-sm">
+          <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
           No sections found matching "{searchTerm}"
         </div>
       )}
@@ -726,8 +838,8 @@ export const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
 
         {/* Report Content */}
         <div className="flex-1 overflow-hidden relative">
-          <ScrollArea 
-            className="h-full" 
+          <div 
+            className="h-full overflow-auto" 
             ref={scrollAreaRef}
             style={{ height: 'calc(100vh - 200px)' }}
           >
@@ -739,10 +851,14 @@ export const EnhancedReportViewer: React.FC<ReportViewerProps> = ({
                   </AlertDescription>
                 </Alert>
               ) : (
-                <ContentRenderer content={content} />
+                <ContentRenderer 
+                  content={content} 
+                  scrollAreaRef={scrollAreaRef}
+                  onActiveSection={setActiveSection}
+                />
               )}
             </div>
-          </ScrollArea>
+          </div>
           
           {/* Scroll to Top Button */}
           {showScrollTop && (
